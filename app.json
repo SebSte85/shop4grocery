@@ -12,6 +12,7 @@
     },
     "ios": {
       "bundleIdentifier": "com.shop4grocery"
-    }
+    },
+    "newArchEnabled": true
   }
 }

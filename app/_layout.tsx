@@ -4,6 +4,7 @@ import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
 import { GlobalProvider } from "@/lib/global-provider";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 
 // Prevent the splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync();
@@ -30,29 +31,31 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <GlobalProvider>
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: {
-              backgroundColor: "#011A38", // background color from tailwind config
-            },
-          }}
-        >
-          <Stack.Screen
-            name="(auth)"
-            options={{
+      <BottomSheetModalProvider>
+        <GlobalProvider>
+          <Stack
+            screenOptions={{
               headerShown: false,
+              contentStyle: {
+                backgroundColor: "#011A38", // background color from tailwind config
+              },
             }}
-          />
-          <Stack.Screen
-            name="(app)"
-            options={{
-              headerShown: false,
-            }}
-          />
-        </Stack>
-      </GlobalProvider>
+          >
+            <Stack.Screen
+              name="(auth)"
+              options={{
+                headerShown: false,
+              }}
+            />
+            <Stack.Screen
+              name="(app)"
+              options={{
+                headerShown: false,
+              }}
+            />
+          </Stack>
+        </GlobalProvider>
+      </BottomSheetModalProvider>
     </GestureHandlerRootView>
   );
 }

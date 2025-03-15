@@ -191,8 +191,6 @@ export function useList(id: string) {
           throw new Error("Liste nicht gefunden");
         }
 
-        console.log("📦 Raw Supabase response:", data);
-
         // Transform the data to match the expected types
         const transformedData: ShoppingList = {
           id: data.id,
@@ -218,7 +216,7 @@ export function useList(id: string) {
             })) || [],
         };
 
-        console.log("📦 Transformed list data:", transformedData);
+        "📦 Transformed list data:", transformedData;
 
         return transformedData;
       } catch (error) {
