@@ -1,36 +1,22 @@
-import React, { useState } from "react";
-import { View, TouchableOpacity, Image } from "react-native";
+import { View, TouchableOpacity } from "react-native";
 import { useRouter } from "expo-router";
 import { Text } from "@/components/ui/Text";
+import { Input } from "@/components/ui/Input";
 import { useCreateList } from "@/hooks/useLists";
+import { useState } from "react";
+import { SupermarketSelector } from "@/components/lists/SupermarketSelector";
 import { Ionicons } from "@expo/vector-icons";
-import { TextInput } from "react-native-gesture-handler";
-
-const SUPERMARKET_SUGGESTIONS = [
-  "Aldi",
-  "Lidl",
-  "Rewe",
-  "Edeka",
-  "Kaufland",
-  "Penny",
-  "Netto",
-  "Real",
-  "Hit",
-  "Globus",
-];
 
 export default function NewListScreen() {
   const router = useRouter();
   const createList = useCreateList();
-  const [listName, setListName] = useState("");
+  const [name, setName] = useState("");
 
   const handleCreate = async () => {
-    if (!listName.trim()) return;
+    if (!name.trim()) return;
 
     try {
-      await createList.mutateAsync({
-        name: listName.trim(),
-      });
+      await createList.mutateAsync({ name: name.trim() });
       router.back();
     } catch (error) {
       console.error("Error creating list:", error);
@@ -38,9 +24,9 @@ export default function NewListScreen() {
   };
 
   return (
-    <View className="flex-1 bg-black-1 p-4">
+    <View className="flex-1 bg-black-1">
       {/* Header */}
-      <View className="flex-row items-center mb-8">
+      <View className="flex-row items-center p-4">
         <TouchableOpacity
           onPress={() => router.back()}
           className="mr-4"
@@ -48,65 +34,35 @@ export default function NewListScreen() {
         >
           <Ionicons name="arrow-back" size={24} color="white" />
         </TouchableOpacity>
-        <Text variant="semibold" className="text-2xl">
+        <Text variant="semibold" className="text-3xl text-primary-1">
           Neue Liste
         </Text>
       </View>
 
-      {/* Store Icon */}
-      <View className="items-center mb-8">
-        <Image
-          source={require("@/assets/images/store.png")}
-          className="size-20"
-          resizeMode="contain"
+      {/* Content */}
+      <View className="flex-1 px-4">
+        <Input
+          placeholder="Name der Liste"
+          value={name}
+          onChangeText={setName}
+          autoFocus
         />
+
+        <SupermarketSelector onSelect={setName} />
       </View>
 
-      {/* Input */}
-      <TextInput
-        value={listName}
-        onChangeText={setListName}
-        placeholder="Name der Liste"
-        placeholderTextColor="#4A5568"
-        className="bg-black-2 rounded-xl px-4 py-3 text-white mb-6 font-rubik-regular"
-        autoFocus
-      />
-
-      {/* Suggestions */}
-      <View className="mb-8">
-        <Text variant="medium" className="mb-4">
-          Vorschläge
-        </Text>
-        <View className="flex-row flex-wrap gap-2">
-          {SUPERMARKET_SUGGESTIONS.map((store) => (
-            <TouchableOpacity
-              key={store}
-              onPress={() => setListName(store)}
-              className="px-4 py-2 rounded-full bg-[#1E2B49]"
-            >
-              <Text variant="medium" className="text-black-3">
-                {store}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-
-      {/* Create Button */}
-      <TouchableOpacity
-        onPress={handleCreate}
-        disabled={!listName.trim()}
-        className={`py-4 rounded-xl items-center ${
-          listName.trim() ? "bg-primary-1" : "bg-black-2"
-        }`}
-      >
-        <Text
-          variant="semibold"
-          className={listName.trim() ? "text-white" : "text-black-3"}
+      {/* Bottom Button */}
+      <View className="px-4 pb-8">
+        <TouchableOpacity
+          onPress={handleCreate}
+          disabled={!name.trim()}
+          className="bg-primary-1 p-4 rounded-xl items-center"
         >
-          Liste erstellen
-        </Text>
-      </TouchableOpacity>
+          <Text variant="semibold" className="uppercase text-white">
+            LISTE ERSTELLEN
+          </Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }

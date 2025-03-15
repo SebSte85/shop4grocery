@@ -1,14 +1,18 @@
-import React, { useCallback } from "react";
-import { View, TouchableOpacity } from "react-native";
+import React from "react";
+import { View } from "react-native";
 import { ListItem as ListItemType, Unit } from "@/types/database.types";
 import {
   useToggleItemCheck,
   useDeleteListItem,
   useUpdateListItem,
 } from "@/hooks/useLists";
+import { TouchableOpacity } from "react-native-gesture-handler";
 import { Text } from "@/components/ui/Text";
 import { Ionicons } from "@expo/vector-icons";
-import { BottomSheetModal } from "@gorhom/bottom-sheet";
+import {
+  BottomSheetModal,
+  BottomSheetModalProvider,
+} from "@gorhom/bottom-sheet";
 import { ItemBottomSheet } from "./ItemBottomSheet";
 
 export function ListItem({ item }: { item: ListItemType }) {
@@ -17,38 +21,33 @@ export function ListItem({ item }: { item: ListItemType }) {
   const updateItem = useUpdateListItem();
   const bottomSheetRef = React.useRef<BottomSheetModal>(null);
 
-  const handleToggle = useCallback(() => {
+  const handleToggle = () => {
     toggleCheck.mutate({
       listItemId: item.id,
       isChecked: !item.is_checked,
     });
-  }, [item.id, item.is_checked]);
+  };
 
-  const handleDelete = useCallback(() => {
+  const handleDelete = () => {
     deleteItem.mutate({
       listItemId: item.id,
     });
-  }, [item.id]);
+  };
 
-  const handlePress = useCallback(() => {
-    console.log("ListItem pressed, trying to present bottom sheet");
+  const handlePress = () => {
     bottomSheetRef.current?.present();
-  }, []);
+  };
 
-  const handleUpdate = useCallback(
-    (quantity: number, unit: Unit) => {
-      updateItem.mutate({
-        listItemId: item.id,
-        quantity,
-        unit,
-      });
-      bottomSheetRef.current?.dismiss();
-    },
-    [item.id]
-  );
+  const handleUpdate = (quantity: number, unit: Unit) => {
+    updateItem.mutate({
+      listItemId: item.id,
+      quantity,
+      unit,
+    });
+  };
 
   return (
-    <>
+    <BottomSheetModalProvider>
       <TouchableOpacity
         onPress={handlePress}
         className="flex-row items-center bg-black-2 rounded-xl p-4 mb-2"
@@ -94,6 +93,6 @@ export function ListItem({ item }: { item: ListItemType }) {
         item={item}
         onUpdate={handleUpdate}
       />
-    </>
+    </BottomSheetModalProvider>
   );
 }
