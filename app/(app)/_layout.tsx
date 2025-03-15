@@ -1,53 +1,41 @@
-import { useEffect } from "react";
-import { Stack, useRouter } from "expo-router";
-import { useAuth } from "../../hooks/useAuth";
+import { Tabs } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 
 export default function AppLayout() {
-  const { user, loading } = useAuth();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (!loading && !user) {
-      router.replace("/(auth)/login");
-    }
-  }, [user, loading]);
-
-  if (loading) {
-    return null; // Oder einen Loading-Screen anzeigen
-  }
-
   return (
-    <Stack>
-      <Stack.Screen
-        name="index"
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        tabBarStyle: {
+          backgroundColor: "#011A38",
+          borderTopWidth: 1,
+          borderTopColor: "#0A2547",
+          height: 70,
+          paddingTop: 8,
+          paddingBottom: 8,
+        },
+        tabBarActiveTintColor: "#8B5CF6",
+        tabBarInactiveTintColor: "#64748B",
+      }}
+    >
+      <Tabs.Screen
+        name="lists"
         options={{
-          headerShown: false,
+          title: "Listen",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="list" size={size} color={color} />
+          ),
         }}
       />
-      <Stack.Screen
-        name="lists/new"
-        options={{
-          headerShown: false,
-        }}
-      />
-      <Stack.Screen
-        name="lists/[id]/index"
-        options={{
-          headerShown: false,
-        }}
-      />
-      <Stack.Screen
-        name="lists/[id]/add-items"
-        options={{
-          headerShown: false,
-        }}
-      />
-      <Stack.Screen
+      <Tabs.Screen
         name="profile"
         options={{
-          headerShown: false,
+          title: "Profil",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="person" size={size} color={color} />
+          ),
         }}
       />
-    </Stack>
+    </Tabs>
   );
 }

@@ -9,10 +9,7 @@ import {
 import { TouchableOpacity } from "react-native-gesture-handler";
 import { Text } from "@/components/ui/Text";
 import { Ionicons } from "@expo/vector-icons";
-import {
-  BottomSheetModal,
-  BottomSheetModalProvider,
-} from "@gorhom/bottom-sheet";
+import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { ItemBottomSheet } from "./ItemBottomSheet";
 
 export function ListItem({ item }: { item: ListItemType }) {
@@ -47,7 +44,7 @@ export function ListItem({ item }: { item: ListItemType }) {
   };
 
   return (
-    <BottomSheetModalProvider>
+    <>
       <TouchableOpacity
         onPress={handlePress}
         className="flex-row items-center bg-black-2 rounded-xl p-4 mb-2"
@@ -93,6 +90,6 @@ export function ListItem({ item }: { item: ListItemType }) {
         item={item}
         onUpdate={handleUpdate}
       />
-    </BottomSheetModalProvider>
+    </>
   );
 }

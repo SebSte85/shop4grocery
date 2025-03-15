@@ -5,7 +5,7 @@ import { useLists } from "@/hooks/useLists";
 import { useRouter, Link } from "expo-router";
 import { TouchableOpacity } from "react-native-gesture-handler";
 
-export default function HomeScreen() {
+export default function ListsScreen() {
   const { data: lists, isLoading } = useLists();
   const router = useRouter();
 
@@ -20,10 +20,10 @@ export default function HomeScreen() {
   return (
     <View className="flex-1 bg-black-1">
       <View className="p-4">
-        <Text variant="semibold" className="text-4xl text-primary-1">
+        <Text variant="semibold" className="text-3xl text-primary-1">
           Meine Listen
         </Text>
-        <Text variant="light" className="text-black-3 mt-1">
+        <Text variant="light" className="text-black-3 mt-1 font-rubik-semibold">
           Verwalte deine Einkaufslisten
         </Text>
       </View>

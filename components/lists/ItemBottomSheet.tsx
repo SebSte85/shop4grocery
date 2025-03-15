@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { View, TextInput } from "react-native";
+import { View, TextInput, StyleSheet } from "react-native";
 import {
   BottomSheetModal,
   BottomSheetBackdrop,
@@ -28,7 +28,7 @@ export function ItemBottomSheet({
   const [selectedUnit, setSelectedUnit] = useState(item.unit);
   const [tempQuantity, setTempQuantity] = useState(quantity.toString());
 
-  const snapPoints = useMemo(() => ["50%"], []);
+  const snapPoints = useMemo(() => ["60%"], []);
 
   const handleSheetChanges = useCallback((index: number) => {
     console.log("handleSheetChanges", index);
@@ -72,7 +72,7 @@ export function ItemBottomSheet({
         appearsOnIndex={0}
         disappearsOnIndex={-1}
         pressBehavior="close"
-        opacity={0.5}
+        opacity={0.7}
       />
     ),
     []
@@ -90,6 +90,7 @@ export function ItemBottomSheet({
       backgroundStyle={{ backgroundColor: "#011A38" }}
       handleIndicatorStyle={{ backgroundColor: "#ffffff33" }}
       enablePanDownToClose={true}
+      style={styles.bottomSheet}
     >
       <BottomSheetView style={{ flex: 1 }}>
         <View className="px-4 flex-1">
@@ -187,9 +188,9 @@ export function ItemBottomSheet({
           </View>
 
           {/* Save Button */}
-          <View className="px-2 pb-8 bg-primary-1 py-5 rounded-xl items-center mt-4">
+          <View className=" bg-primary-1 py-3 rounded-xl items-center mt-4">
             <TouchableOpacity onPress={handleSave}>
-              <Text variant="semibold" className="text-xl uppercase">
+              <Text variant="semibold" className=" uppercase">
                 SPEICHERN
               </Text>
             </TouchableOpacity>
@@ -199,3 +200,10 @@ export function ItemBottomSheet({
     </BottomSheetModal>
   );
 }
+
+const styles = StyleSheet.create({
+  bottomSheet: {
+    zIndex: 1000,
+    elevation: 10,
+  },
+});

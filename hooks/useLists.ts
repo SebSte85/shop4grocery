@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { ShoppingList, Unit } from "@/types/database.types";
 import { useAuth } from "./useAuth";
+import { useRouter } from "expo-router";
 
 export function useLists() {
   const { user } = useAuth();
@@ -361,6 +362,53 @@ export function useUpdateListItem() {
       if (data?.listId) {
         queryClient.invalidateQueries({ queryKey: ["list", data.listId] });
       }
+    },
+  });
+}
+
+export function useDeleteList() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const router = useRouter();
+
+  return useMutation({
+    mutationFn: async (listId: string) => {
+      if (!user?.id) {
+        throw new Error("Benutzer nicht angemeldet");
+      }
+
+      // Zuerst prüfen, ob die Liste dem Benutzer gehört
+      const { data: list, error: fetchError } = await supabase
+        .from("shopping_lists")
+        .select("user_id")
+        .eq("id", listId)
+        .single();
+
+      if (fetchError) {
+        console.error("Error fetching list:", fetchError);
+        throw new Error("Fehler beim Laden der Liste");
+      }
+
+      if (list.user_id !== user.id) {
+        throw new Error("Keine Berechtigung zum Löschen dieser Liste");
+      }
+
+      // Liste löschen
+      const { error } = await supabase
+        .from("shopping_lists")
+        .delete()
+        .eq("id", listId);
+
+      if (error) {
+        console.error("Error deleting list:", error);
+        throw new Error("Fehler beim Löschen der Liste");
+      }
+
+      return listId;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["lists"] });
+      router.replace("/lists");
     },
   });
 }

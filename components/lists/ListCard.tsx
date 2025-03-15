@@ -39,7 +39,7 @@ export function ListCard({ list, onPress }: ListCardProps) {
         </View>
 
         {/* Progress Bar */}
-        <View className="h-1 bg-black-1 rounded-full overflow-hidden">
+        <View className="h-2 bg-black-1 rounded-full overflow-hidden">
           <View
             className="h-full bg-primary-1 rounded-full"
             style={{ width: `${progress}%` }}
