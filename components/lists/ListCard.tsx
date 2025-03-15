@@ -17,14 +17,14 @@ export function ListCard({ list }: ListCardProps) {
   return (
     <TouchableOpacity
       onPress={() => router.push(`/lists/${list.id}`)}
-      className="bg-black-2 rounded-xl p-4"
+      className="bg-black-2 rounded-xl p-4 mb-2"
     >
       <Text variant="semibold" className="text-lg mb-2">
         {list.name}
       </Text>
 
       <View className="flex-row justify-between items-center mb-2">
-        <Text variant="light" className="text-black-3">
+        <Text variant="light" className="text-black-3 font-rubik-semibold">
           {totalItems} {totalItems === 1 ? "Item" : "Items"}
         </Text>
         <Text variant="medium" className="text-primary-1">

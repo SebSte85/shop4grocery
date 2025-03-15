@@ -5,11 +5,15 @@ import { ListItem } from "@/components/lists/ListItem";
 import { useList } from "@/hooks/useLists";
 import { TouchableOpacity } from "react-native-gesture-handler";
 import { Ionicons } from "@expo/vector-icons";
+import { ShoppingList } from "@/types/database.types";
 
 export default function ListScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { data: list, isLoading } = useList(id);
+  const { data: list, isLoading } = useList(id) as {
+    data: ShoppingList | undefined;
+    isLoading: boolean;
+  };
 
   if (isLoading) {
     return (
@@ -36,7 +40,7 @@ export default function ListScreen() {
   return (
     <View className="flex-1 bg-black-1">
       {/* Header */}
-      <View className="flex-row items-center p-4">
+      <View className="flex-row items-center juc p-4">
         <TouchableOpacity
           onPress={() => router.back()}
           className="mr-4"
@@ -44,7 +48,7 @@ export default function ListScreen() {
         >
           <Ionicons name="arrow-back" size={24} color="white" />
         </TouchableOpacity>
-        <Text variant="semibold" className="text-xl text-primary-1">
+        <Text variant="semibold" className="text-3xl text-primary-1">
           {list.name}
         </Text>
       </View>
@@ -84,7 +88,9 @@ export default function ListScreen() {
         onPress={() => router.push(`/lists/${id}/add-items`)}
         className="mx-4 mb-8 bg-primary-1 p-4 rounded-xl items-center"
       >
-        <Text variant="semibold">Items hinzufügen</Text>
+        <Text variant="semibold" className="uppercase">
+          ITEMS HINZUFÜGEN
+        </Text>
       </TouchableOpacity>
     </View>
   );

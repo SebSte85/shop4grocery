@@ -23,7 +23,7 @@ export default function ListsScreen() {
         <Text variant="extrabold" className="text-3xl mb-2">
           Meine Listen
         </Text>
-        <Text variant="light" className="text-black-3">
+        <Text variant="light" className="text-black-3 font-rubik-semibold">
           Verwalte deine Einkaufslisten
         </Text>
       </View>

@@ -164,15 +164,25 @@ export function useList(id: string) {
           throw new Error("Liste nicht gefunden");
         }
 
-        return data;
+        // Transform the data to match the expected types
+        const transformedData = {
+          ...data,
+          items:
+            data.items?.map((listItem) => ({
+              ...listItem,
+              item: listItem.item, // Keep the item object as is
+            })) || [],
+        };
+
+        return transformedData as ShoppingList;
       } catch (error) {
         console.error("Error in useList:", error);
         throw error;
       }
     },
     enabled: !!id && !!user?.id,
-    staleTime: 1000 * 60, // Cache für 1 Minute
-    retry: 2, // Maximal 2 Wiederholungsversuche
+    staleTime: 1000 * 60,
+    retry: 2,
   });
 }
 
@@ -209,7 +219,7 @@ export function useDeleteListItem() {
 
   return useMutation({
     mutationFn: async ({ listItemId }: { listItemId: string }) => {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("list_items")
         .delete()
         .eq("id", listItemId)
@@ -217,10 +227,11 @@ export function useDeleteListItem() {
         .single();
 
       if (error) throw error;
-      return { listItemId };
+      return { listItemId, listId: data.list_id };
     },
-    onSettled: () => {
-      // Alle Listen neu laden
+    onSuccess: (data) => {
+      // Invalidate both the specific list and the lists overview
+      queryClient.invalidateQueries({ queryKey: ["list", data.listId] });
       queryClient.invalidateQueries({ queryKey: ["lists"] });
     },
   });
