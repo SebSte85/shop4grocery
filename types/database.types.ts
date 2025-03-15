@@ -18,11 +18,14 @@ export interface ShoppingList {
   items: ListItem[];
 }
 
+export type Unit = "Stück" | "kg" | "g" | "l" | "ml";
+
 export interface ListItem {
   id: string;
   list_id: string;
   item_id: string;
   quantity: number;
+  unit: Unit;
   is_checked: boolean;
   created_at: string;
   updated_at: string;

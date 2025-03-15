@@ -1,14 +1,14 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { ShoppingList } from "@/types/database.types";
+import { ShoppingList, Unit } from "@/types/database.types";
 import { useAuth } from "./useAuth";
 
 export function useLists() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  return useQuery<ShoppingList[], Error>({
-    queryKey: ["lists", user?.id],
+  return useQuery<ShoppingList[]>({
+    queryKey: ["lists"],
     queryFn: async () => {
       try {
         if (!user?.id) {
@@ -34,7 +34,8 @@ export function useLists() {
               created_at,
               updated_at,
               notes,
-              item:items (
+              unit,
+              item:items!inner (
                 id,
                 name,
                 is_popular,
@@ -58,15 +59,40 @@ export function useLists() {
           return [];
         }
 
-        return data;
+        // Transform the data to match the expected types
+        const transformedData: ShoppingList[] = data.map((list) => ({
+          id: list.id,
+          name: list.name,
+          user_id: list.user_id,
+          created_at: list.created_at,
+          updated_at: list.updated_at,
+          is_archived: list.is_archived,
+          items:
+            list.items?.map((listItem) => ({
+              id: listItem.id,
+              list_id: listItem.list_id,
+              item_id: listItem.item_id,
+              quantity: listItem.quantity,
+              unit: listItem.unit || "Stück",
+              is_checked: listItem.is_checked,
+              created_at: listItem.created_at,
+              updated_at: listItem.updated_at,
+              notes: listItem.notes,
+              item: Array.isArray(listItem.item)
+                ? listItem.item[0]
+                : listItem.item,
+            })) || [],
+        }));
+
+        return transformedData;
       } catch (error) {
         console.error("Error in useLists:", error);
         throw error;
       }
     },
     enabled: !!user?.id,
-    staleTime: 1000 * 60, // Cache für 1 Minute
-    retry: 2, // Maximal 2 Wiederholungsversuche
+    staleTime: 1000 * 60,
+    retry: 2,
   });
 }
 
@@ -104,7 +130,7 @@ export function useCreateList() {
       return newList;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["lists", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["lists"] });
     },
   });
 }
@@ -113,7 +139,7 @@ export function useList(id: string) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  return useQuery<ShoppingList, Error>({
+  return useQuery<ShoppingList>({
     queryKey: ["list", id],
     queryFn: async () => {
       try {
@@ -140,7 +166,8 @@ export function useList(id: string) {
               created_at,
               updated_at,
               notes,
-              item:items (
+              unit,
+              item:items!inner (
                 id,
                 name,
                 is_popular,
@@ -164,17 +191,36 @@ export function useList(id: string) {
           throw new Error("Liste nicht gefunden");
         }
 
+        console.log("📦 Raw Supabase response:", data);
+
         // Transform the data to match the expected types
-        const transformedData = {
-          ...data,
+        const transformedData: ShoppingList = {
+          id: data.id,
+          name: data.name,
+          user_id: data.user_id,
+          created_at: data.created_at,
+          updated_at: data.updated_at,
+          is_archived: data.is_archived,
           items:
             data.items?.map((listItem) => ({
-              ...listItem,
-              item: listItem.item, // Keep the item object as is
+              id: listItem.id,
+              list_id: listItem.list_id,
+              item_id: listItem.item_id,
+              quantity: listItem.quantity,
+              unit: listItem.unit || "Stück",
+              is_checked: listItem.is_checked,
+              created_at: listItem.created_at,
+              updated_at: listItem.updated_at,
+              notes: listItem.notes,
+              item: Array.isArray(listItem.item)
+                ? listItem.item[0]
+                : listItem.item,
             })) || [],
         };
 
-        return transformedData as ShoppingList;
+        console.log("📦 Transformed list data:", transformedData);
+
+        return transformedData;
       } catch (error) {
         console.error("Error in useList:", error);
         throw error;
@@ -197,19 +243,67 @@ export function useToggleItemCheck() {
       listItemId: string;
       isChecked: boolean;
     }) => {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("list_items")
-        .update({ is_checked: isChecked })
+        .update({
+          is_checked: isChecked,
+          updated_at: new Date().toISOString(),
+        })
         .eq("id", listItemId)
         .select("list_id")
         .single();
 
       if (error) throw error;
-      return { listItemId, isChecked };
+      return { listItemId, isChecked, listId: data.list_id };
     },
-    onSettled: () => {
-      // Alle Listen neu laden
+    // Optimistische Aktualisierung für bessere UX
+    onMutate: async ({ listItemId, isChecked }) => {
+      // Queries pausieren
+      await queryClient.cancelQueries({ queryKey: ["lists"] });
+      await queryClient.cancelQueries({ queryKey: ["list"] });
+
+      // Snapshot des aktuellen Zustands
+      const previousLists = queryClient.getQueryData<ShoppingList[]>(["lists"]);
+      const previousList = queryClient.getQueryData<ShoppingList>(["list"]);
+
+      // Cache optimistisch aktualisieren
+      if (previousLists) {
+        queryClient.setQueryData<ShoppingList[]>(["lists"], (lists) =>
+          lists?.map((list) => ({
+            ...list,
+            items: list.items.map((item) =>
+              item.id === listItemId ? { ...item, is_checked: isChecked } : item
+            ),
+          }))
+        );
+      }
+
+      if (previousList) {
+        queryClient.setQueryData<ShoppingList>(["list"], (list) => ({
+          ...list!,
+          items: list!.items.map((item) =>
+            item.id === listItemId ? { ...item, is_checked: isChecked } : item
+          ),
+        }));
+      }
+
+      return { previousLists, previousList };
+    },
+    onError: (err, variables, context) => {
+      // Bei Fehler zum vorherigen Zustand zurückkehren
+      if (context?.previousLists) {
+        queryClient.setQueryData(["lists"], context.previousLists);
+      }
+      if (context?.previousList) {
+        queryClient.setQueryData(["list"], context.previousList);
+      }
+    },
+    onSettled: (data) => {
+      // Queries neu laden
       queryClient.invalidateQueries({ queryKey: ["lists"] });
+      if (data?.listId) {
+        queryClient.invalidateQueries({ queryKey: ["list", data.listId] });
+      }
     },
   });
 }
@@ -233,6 +327,42 @@ export function useDeleteListItem() {
       // Invalidate both the specific list and the lists overview
       queryClient.invalidateQueries({ queryKey: ["list", data.listId] });
       queryClient.invalidateQueries({ queryKey: ["lists"] });
+    },
+  });
+}
+
+export function useUpdateListItem() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      listItemId,
+      quantity,
+      unit,
+    }: {
+      listItemId: string;
+      quantity: number;
+      unit: Unit;
+    }) => {
+      const { data, error } = await supabase
+        .from("list_items")
+        .update({
+          quantity,
+          unit,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", listItemId)
+        .select("list_id")
+        .single();
+
+      if (error) throw error;
+      return { listItemId, quantity, unit, listId: data.list_id };
+    },
+    onSettled: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["lists"] });
+      if (data?.listId) {
+        queryClient.invalidateQueries({ queryKey: ["list", data.listId] });
+      }
     },
   });
 }

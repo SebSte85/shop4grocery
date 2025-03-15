@@ -3,7 +3,7 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { Text } from "@/components/ui/Text";
 import { ListItem } from "@/components/lists/ListItem";
 import { useList } from "@/hooks/useLists";
-import { TouchableOpacity } from "react-native-gesture-handler";
+import { TouchableOpacity, ScrollView } from "react-native-gesture-handler";
 import { Ionicons } from "@expo/vector-icons";
 import { ShoppingList } from "@/types/database.types";
 
@@ -33,9 +33,8 @@ export default function ListScreen() {
     );
   }
 
-  const completedItems =
-    list.items?.filter((item) => item.is_checked)?.length || 0;
-  const totalItems = list.items?.length || 0;
+  const uncheckedItems = list.items?.filter((item) => !item.is_checked) || [];
+  const checkedItems = list.items?.filter((item) => item.is_checked) || [];
 
   return (
     <View className="flex-1 bg-black-1">
@@ -58,40 +57,62 @@ export default function ListScreen() {
         <Text variant="medium" className="mb-2">
           Fortschritt
         </Text>
-        <Text variant="light" className="text-black-3">
-          {completedItems} von {totalItems} Items erledigt
+        <Text variant="light" className="text-black-3 font-rubik-semibold">
+          {checkedItems.length} von {list.items?.length || 0} Items erledigt
         </Text>
       </View>
 
-      {/* Items */}
-      <View className="flex-1 px-4">
-        {list.items && list.items.length > 0 ? (
-          <View className="space-y-2">
+      {/* Items List */}
+      <ScrollView className="flex-1 px-4" showsVerticalScrollIndicator={false}>
+        {/* Unchecked Items */}
+        {uncheckedItems.length > 0 && (
+          <View className="mb-6">
             <Text variant="medium" className="mb-2">
               Noch zu kaufen
             </Text>
-            {list.items.map((item) => (
-              <ListItem key={item.id} item={item} />
-            ))}
+            <View className="space-y-2">
+              {uncheckedItems.map((item) => (
+                <ListItem key={item.id} item={item} />
+              ))}
+            </View>
           </View>
-        ) : (
+        )}
+
+        {/* Checked Items */}
+        {checkedItems.length > 0 && (
+          <View className="mb-24">
+            <Text variant="medium" className="mb-2">
+              Bereits eingepackt
+            </Text>
+            <View className="space-y-2">
+              {checkedItems.map((item) => (
+                <ListItem key={item.id} item={item} />
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* Empty State */}
+        {list.items?.length === 0 && (
           <View className="flex-1 items-center justify-center">
             <Text variant="medium" className="text-black-3 text-center">
               Keine Items in der Liste
             </Text>
           </View>
         )}
-      </View>
+      </ScrollView>
 
       {/* Add Button */}
-      <TouchableOpacity
-        onPress={() => router.push(`/lists/${id}/add-items`)}
-        className="mx-4 mb-8 bg-primary-1 p-4 rounded-xl items-center"
-      >
-        <Text variant="semibold" className="uppercase">
-          ITEMS HINZUFÜGEN
-        </Text>
-      </TouchableOpacity>
+      <View className="px-4 pb-8 pt-2 bg-black-1">
+        <TouchableOpacity
+          onPress={() => router.push(`/lists/${id}/add-items`)}
+          className="bg-primary-1 p-4 rounded-xl items-center"
+        >
+          <Text variant="semibold" className="uppercase">
+            ITEMS HINZUFÜGEN
+          </Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
