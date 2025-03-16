@@ -4,9 +4,10 @@ import {
   TouchableOpacity,
   ScrollView,
   TextInput,
+  Keyboard,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import { useState } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   useItems,
   useAddItemToList,
@@ -20,7 +21,8 @@ export default function AddItemsScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [searchText, setSearchText] = useState("");
-  const { data: items, isLoading } = useItems(searchText);
+  const [debouncedSearchText, setDebouncedSearchText] = useState("");
+  const { data: items, isLoading } = useItems(debouncedSearchText);
   const addItemToList = useAddItemToList();
   const createCustomItem = useCreateCustomItem();
 
@@ -29,7 +31,44 @@ export default function AddItemsScreen() {
   >({});
   const [error, setError] = useState<string | null>(null);
 
+  // Debounce-Effekt für die Suche
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearchText(searchText);
+    }, 300); // 300ms Verzögerung
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [searchText]);
+
+  // Prüfen, ob ein neues Item erstellt werden kann
+  const newItemExists = useMemo(() => {
+    if (!searchText.trim() || !items) return false;
+    return !items.some(
+      (item) => item.name.toLowerCase() === searchText.trim().toLowerCase()
+    );
+  }, [searchText, items]);
+
+  // Virtuelles Item für die Anzeige
+  const virtualNewItem: Item | null = useMemo(() => {
+    if (!newItemExists || !searchText.trim()) return null;
+    return {
+      id: "new-item-temp",
+      name: searchText.trim(),
+      is_popular: false,
+      created_at: new Date().toISOString(),
+      created_by: "",
+      is_custom: true,
+    };
+  }, [newItemExists, searchText]);
+
   const handleSelectItem = (item: Item) => {
+    // Ignoriere Klicks auf das virtuelle neue Item
+    if (item.id === "new-item-temp") {
+      return;
+    }
+
     setSelectedItems((prev) => {
       const newItems = { ...prev };
       if (newItems[item.id]) {
@@ -71,8 +110,16 @@ export default function AddItemsScreen() {
       const newItem = await createCustomItem.mutateAsync({
         name: searchText,
       });
+
+      // Füge das Item direkt zur Liste hinzu
+      await addItemToList.mutateAsync({
+        listId: id,
+        itemId: newItem.id,
+        quantity: 1,
+      });
+
+      // Leere das Suchfeld, aber bleibe auf der Seite
       setSearchText("");
-      handleSelectItem(newItem);
     } catch (err) {
       setError(
         "Fehler beim Erstellen des Items. Bitte versuchen Sie es erneut."
@@ -87,6 +134,14 @@ export default function AddItemsScreen() {
       </View>
     );
   }
+
+  // Kombinierte Liste aus vorhandenen Items und dem virtuellen neuen Item
+  const displayItems = virtualNewItem
+    ? [...(items || []), virtualNewItem]
+    : items || [];
+
+  // Prüfen, ob der "Hinzufügen"-Button angezeigt werden soll
+  const showAddButton = searchText.trim().length > 0 && newItemExists;
 
   return (
     <View className="flex-1 bg-black-1">
@@ -107,6 +162,8 @@ export default function AddItemsScreen() {
             value={searchText}
             onChangeText={setSearchText}
             onSubmitEditing={handleCreateItem}
+            autoFocus={true}
+            blurOnSubmit={false}
           />
           {searchText.length > 0 && (
             <TouchableOpacity onPress={() => setSearchText("")}>
@@ -124,22 +181,32 @@ export default function AddItemsScreen() {
       </View>
 
       {/* Content */}
-      <ScrollView className="flex-1">
-        {!searchText && (
+      <ScrollView className="flex-1" keyboardShouldPersistTaps="handled">
+        {!debouncedSearchText && (
+          <View className="px-4 pt-4">
+            <Text className="text-primary-1 font-rubik-semibold text-lg mb-4">
+              DEINE HÄUFIGSTEN ITEMS
+            </Text>
+          </View>
+        )}
+
+        {debouncedSearchText && virtualNewItem && (
           <View className="px-4 pt-4">
             <Text className="text-primary-1 font-rubik text-lg mb-4">
-              POPULÄR
+              NEUES ITEM
             </Text>
           </View>
         )}
 
         <View>
-          {items?.map((item) => (
+          {displayItems.map((item) => (
             <ItemSelector
               key={item.id}
               item={item}
               isSelected={!!selectedItems[item.id]}
               onSelect={handleSelectItem}
+              isNewItem={item.id === "new-item-temp"}
+              isClickable={item.id !== "new-item-temp"}
             />
           ))}
         </View>
@@ -151,23 +218,20 @@ export default function AddItemsScreen() {
         )}
       </ScrollView>
 
-      {/* Add Button */}
-      {searchText.trim().length > 0 &&
-        !items?.some(
-          (item) => item.name.toLowerCase() === searchText.trim().toLowerCase()
-        ) && (
-          <View className="absolute bottom-4 right-4">
-            <TouchableOpacity
-              onPress={handleCreateItem}
-              className="bg-primary-1 w-14 h-14 rounded-full items-center justify-center"
-            >
-              <Ionicons name="add" size={24} color="white" />
-            </TouchableOpacity>
-          </View>
-        )}
+      {/* Add New Item Button */}
+      {showAddButton && (
+        <View className="absolute bottom-4 right-4">
+          <TouchableOpacity
+            onPress={handleCreateItem}
+            className="bg-primary-1 w-14 h-14 rounded-full items-center justify-center"
+          >
+            <Ionicons name="checkmark" size={24} color="white" />
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Add Selected Items Button */}
-      {Object.keys(selectedItems).length > 0 && (
+      {Object.keys(selectedItems).length > 0 && !showAddButton && (
         <View className="absolute bottom-4 right-4">
           <TouchableOpacity
             onPress={handleAddItems}

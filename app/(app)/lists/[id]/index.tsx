@@ -8,6 +8,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { ShoppingList } from "@/types/database.types";
 import { Image } from "react-native";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
+import { useCreateShoppingSession } from "@/hooks/useShoppingSessions";
 
 export default function ListScreen() {
   const router = useRouter();
@@ -17,6 +18,7 @@ export default function ListScreen() {
     isLoading: boolean;
   };
   const deleteList = useDeleteList();
+  const createShoppingSession = useCreateShoppingSession();
 
   const handleDeleteList = () => {
     Alert.alert("Liste löschen", "Möchtest du diese Liste wirklich löschen?", [
@@ -32,6 +34,32 @@ export default function ListScreen() {
         style: "destructive",
       },
     ]);
+  };
+
+  const handleCompleteShoppingSession = () => {
+    if (!list) return;
+
+    Alert.alert(
+      "Einkauf abschließen",
+      "Möchtest du diesen Einkauf als abgeschlossen markieren? Alle Items werden aus der Liste entfernt und du kehrst zur Übersicht zurück.",
+      [
+        {
+          text: "Abbrechen",
+          style: "cancel",
+        },
+        {
+          text: "Abschließen",
+          onPress: () => {
+            const checkedItems = list.items.filter((item) => item.is_checked);
+            createShoppingSession.mutate({
+              listId: list.id,
+              storeName: list.name,
+              items: checkedItems,
+            });
+          },
+        },
+      ]
+    );
   };
 
   if (isLoading) {
@@ -54,6 +82,10 @@ export default function ListScreen() {
 
   const uncheckedItems = list.items?.filter((item) => !item.is_checked) || [];
   const checkedItems = list.items?.filter((item) => item.is_checked) || [];
+
+  // Prüfe, ob der "Einkauf fertig" Button angezeigt werden soll
+  const showCompleteButton =
+    uncheckedItems.length === 0 && checkedItems.length > 0;
 
   // Logo URL von Clearbit API
   const getLogoUrl = () => {
@@ -157,15 +189,27 @@ export default function ListScreen() {
           )}
         </ScrollView>
 
-        {/* Add Button */}
+        {/* Action Buttons */}
         <View className="px-4 pb-8 pt-2 bg-black-1">
+          {showCompleteButton && (
+            <TouchableOpacity
+              onPress={handleCompleteShoppingSession}
+              className="bg-primary-1 p-4 rounded-xl items-center"
+            >
+              <Text variant="semibold" className="uppercase text-white">
+                EINKAUF FERTIG
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Add Items FAB */}
+        <View className="absolute bottom-8 right-8">
           <TouchableOpacity
             onPress={() => router.push(`/lists/${id}/add-items`)}
-            className="bg-primary-1 p-4 rounded-xl items-center"
+            className="bg-primary-1 w-14 h-14 rounded-full items-center justify-center shadow-lg"
           >
-            <Text variant="semibold" className="uppercase">
-              ITEMS HINZUFÜGEN
-            </Text>
+            <Ionicons name="add" size={30} color="white" />
           </TouchableOpacity>
         </View>
       </View>

@@ -2,47 +2,64 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { Item } from "@/types/database.types";
 import { useAuth } from "./useAuth";
-import { DEFAULT_POPULAR_ITEMS } from "@/constants/items";
 
-// Hook zum Initialisieren der populären Items
-export function useInitializePopularItems() {
-  const queryClient = useQueryClient();
+// Hook zum Abrufen der häufigsten Items des Benutzers aus abgeschlossenen Einkaufssessions
+export function useUserPopularItems(limit: number = 20) {
+  const { user } = useAuth();
 
-  return useMutation({
-    mutationFn: async () => {
-      // Für jedes DEFAULT_POPULAR_ITEM
-      for (const item of DEFAULT_POPULAR_ITEMS) {
-        // Prüfen ob es bereits existiert
-        const { data: existingItems } = await supabase
-          .from("items")
-          .select("*")
-          .eq("name", item.name)
-          .eq("is_popular", true)
-          .limit(1);
-
-        // Wenn es nicht existiert, erstellen
-        if (!existingItems?.length) {
-          const { error } = await supabase.from("items").insert([item]);
-
-          if (error) throw error;
+  return useQuery<Item[], Error>({
+    queryKey: ["userPopularItems"],
+    queryFn: async () => {
+      try {
+        if (!user?.id) {
+          console.log("useUserPopularItems: Kein Benutzer angemeldet");
+          return [];
         }
+
+        console.log("useUserPopularItems: Rufe Daten für Benutzer ab", user.id);
+
+        // Abfrage, um die häufigsten Items aus den Einkaufssessions des Benutzers zu erhalten
+        const { data, error } = await supabase.rpc("get_user_popular_items", {
+          user_id_param: user.id,
+          limit_param: limit,
+        });
+
+        if (error) {
+          console.error("Error fetching user popular items:", error);
+          throw error;
+        }
+
+        console.log("useUserPopularItems: Erhaltene Daten:", data);
+        console.log(
+          "useUserPopularItems: Anzahl der Items:",
+          data?.length || 0
+        );
+
+        return data || [];
+      } catch (err) {
+        console.error("Error in useUserPopularItems:", err);
+        throw err;
       }
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["items"] });
-    },
+    enabled: !!user?.id,
   });
 }
 
 export function useItems(searchText?: string) {
   const { user } = useAuth();
+  const { data: userPopularItems = [], isLoading: isLoadingUserItems } =
+    useUserPopularItems();
 
   return useQuery<Item[], Error>({
     queryKey: ["items", searchText],
     queryFn: async () => {
       try {
+        console.log("useItems: Suchtext:", searchText);
+
         // Wenn es einen Suchtext gibt, suchen wir in der Datenbank
         if (searchText?.trim()) {
+          console.log("useItems: Suche nach Items mit Suchtext");
+
           const { data, error } = await supabase
             .from("items")
             .select("*")
@@ -50,23 +67,33 @@ export function useItems(searchText?: string) {
             .order("name");
 
           if (error) throw error;
+
+          console.log(
+            "useItems: Gefundene Items mit Suchtext:",
+            data?.length || 0
+          );
           return data || [];
         }
 
-        // Ansonsten holen wir die populären Items aus der Datenbank
-        const { data, error } = await supabase
-          .from("items")
-          .select("*")
-          .eq("is_popular", true)
-          .order("name");
+        // Wenn der Benutzer bereits Einkäufe getätigt hat, zeigen wir seine häufigsten Items
+        console.log(
+          "useItems: Benutzer-Items verfügbar:",
+          userPopularItems.length > 0
+        );
+        if (userPopularItems.length > 0) {
+          console.log("useItems: Verwende Benutzer-Items:", userPopularItems);
+          return userPopularItems;
+        }
 
-        if (error) throw error;
-        return data || [];
+        // Wenn keine Benutzer-Items vorhanden sind, geben wir eine leere Liste zurück
+        console.log("useItems: Keine Benutzer-Items vorhanden, leere Liste");
+        return [];
       } catch (err) {
         console.error("Error in useItems:", err);
         throw err;
       }
     },
+    enabled: !isLoadingUserItems,
   });
 }
 

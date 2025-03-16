@@ -42,6 +42,26 @@ export interface Item {
   is_custom: boolean;
 }
 
+export interface ShoppingSession {
+  id: string;
+  user_id: string;
+  list_id: string;
+  store_name: string;
+  total_items: number;
+  completed_at: string;
+  created_at: string;
+}
+
+export interface ShoppingSessionItem {
+  id: string;
+  session_id: string;
+  item_id: string;
+  quantity: number;
+  unit: Unit;
+  created_at: string;
+  item?: Item;
+}
+
 export interface Database {
   users: User;
   shopping_lists: ShoppingList;
