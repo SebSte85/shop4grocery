@@ -9,6 +9,8 @@ import { ShoppingList } from "@/types/database.types";
 import { Image } from "react-native";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { useCreateShoppingSession } from "@/hooks/useShoppingSessions";
+import LottieView from "lottie-react-native";
+import { useRef, useState } from "react";
 
 export default function ListScreen() {
   const router = useRouter();
@@ -19,6 +21,8 @@ export default function ListScreen() {
   };
   const deleteList = useDeleteList();
   const createShoppingSession = useCreateShoppingSession();
+  const cartAnimationRef = useRef<LottieView>(null);
+  const [isCompletingSession, setIsCompletingSession] = useState(false);
 
   const handleDeleteList = () => {
     Alert.alert("Liste löschen", "Möchtest du diese Liste wirklich löschen?", [
@@ -37,29 +41,20 @@ export default function ListScreen() {
   };
 
   const handleCompleteShoppingSession = () => {
+    if (!list || isCompletingSession) return;
+    setIsCompletingSession(true);
+  };
+
+  const handleAnimationFinish = () => {
+    // Einkauf abschließen, nachdem die Animation fertig ist
     if (!list) return;
 
-    Alert.alert(
-      "Einkauf abschließen",
-      "Möchtest du diesen Einkauf als abgeschlossen markieren? Alle Items werden aus der Liste entfernt und du kehrst zur Übersicht zurück.",
-      [
-        {
-          text: "Abbrechen",
-          style: "cancel",
-        },
-        {
-          text: "Abschließen",
-          onPress: () => {
-            const checkedItems = list.items.filter((item) => item.is_checked);
-            createShoppingSession.mutate({
-              listId: list.id,
-              storeName: list.name,
-              items: checkedItems,
-            });
-          },
-        },
-      ]
-    );
+    const checkedItems = list.items.filter((item) => item.is_checked);
+    createShoppingSession.mutate({
+      listId: list.id,
+      storeName: list.name,
+      items: checkedItems,
+    });
   };
 
   if (isLoading) {
@@ -191,27 +186,77 @@ export default function ListScreen() {
 
         {/* Action Buttons */}
         <View className="px-4 pb-8 pt-2 bg-black-1">
-          {showCompleteButton && (
-            <TouchableOpacity
-              onPress={handleCompleteShoppingSession}
-              className="bg-primary-1 p-4 rounded-xl items-center"
-            >
-              <Text variant="semibold" className="uppercase text-white">
-                EINKAUF FERTIG
-              </Text>
-            </TouchableOpacity>
-          )}
+          {showCompleteButton ? (
+            <View className="flex-row items-center">
+              <View className="flex-1 mr-3">
+                <TouchableOpacity
+                  onPress={handleCompleteShoppingSession}
+                  className="bg-primary-1 p-4 rounded-xl w-full flex-row justify-center items-center"
+                  disabled={isCompletingSession}
+                >
+                  <Text
+                    variant="semibold"
+                    className="uppercase text-white mr-3"
+                  >
+                    EINKAUF FERTIG
+                  </Text>
+                  {!isCompletingSession && (
+                    <View
+                      style={{
+                        width: 40,
+                        height: 40,
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Ionicons name="cart-outline" size={28} color="white" />
+                    </View>
+                  )}
+                  {isCompletingSession && (
+                    <View
+                      style={{
+                        width: 40,
+                        height: 40,
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <LottieView
+                        ref={cartAnimationRef}
+                        source={require("../../../../assets/animations/Cart.json")}
+                        style={{ width: 56, height: 56 }}
+                        loop={false}
+                        autoPlay={true}
+                        speed={0.7}
+                        onAnimationFinish={handleAnimationFinish}
+                      />
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity
+                onPress={() => router.push(`/lists/${id}/add-items`)}
+                className="bg-[#1E2B49] w-14 h-14 rounded-full items-center justify-center"
+                disabled={isCompletingSession}
+              >
+                <Ionicons name="add" size={30} color="#B23FFF" />
+              </TouchableOpacity>
+            </View>
+          ) : null}
         </View>
 
-        {/* Add Items FAB */}
-        <View className="absolute bottom-8 right-8">
-          <TouchableOpacity
-            onPress={() => router.push(`/lists/${id}/add-items`)}
-            className="bg-primary-1 w-14 h-14 rounded-full items-center justify-center shadow-lg"
-          >
-            <Ionicons name="add" size={30} color="white" />
-          </TouchableOpacity>
-        </View>
+        {/* Add Items FAB - nur anzeigen, wenn der Complete Button nicht sichtbar ist */}
+        {!showCompleteButton && (
+          <View className="absolute bottom-8 right-8">
+            <TouchableOpacity
+              onPress={() => router.push(`/lists/${id}/add-items`)}
+              className="bg-primary-1 w-14 h-14 rounded-full items-center justify-center shadow-lg"
+            >
+              <Ionicons name="add" size={30} color="white" />
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
     </BottomSheetModalProvider>
   );
