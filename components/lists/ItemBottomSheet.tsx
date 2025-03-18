@@ -1,14 +1,23 @@
-import React, { useCallback, useMemo, useState } from "react";
-import { View, TextInput, StyleSheet } from "react-native";
+import React, { useCallback, useMemo, useState, useEffect } from "react";
+import {
+  View,
+  TextInput,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+} from "react-native";
 import {
   BottomSheetModal,
   BottomSheetBackdrop,
   BottomSheetView,
   BottomSheetTextInput,
-  TouchableOpacity,
+  BottomSheetScrollView,
 } from "@gorhom/bottom-sheet";
 import { Text } from "@/components/ui/Text";
 import { ListItem, Unit } from "@/types/database.types";
+import { Ionicons } from "@expo/vector-icons";
+import { useCategories, useUpdateItemCategory } from "@/hooks/useCategories";
+import { CategoryIcon } from "@/components/ui/CategoryIcon";
 
 interface ItemBottomSheetProps {
   bottomSheetRef: React.RefObject<BottomSheetModal>;
@@ -25,10 +34,22 @@ export function ItemBottomSheet({
   onUpdate,
 }: ItemBottomSheetProps) {
   const [quantity, setQuantity] = useState(item.quantity);
-  const [selectedUnit, setSelectedUnit] = useState(item.unit);
+  const [unit, setUnit] = useState<Unit>(item.unit);
+  const { data: categories } = useCategories();
+  const updateItemCategory = useUpdateItemCategory();
+  const [selectedCategoryId, setSelectedCategoryId] = useState<
+    string | undefined
+  >(item.item.category_id);
   const [tempQuantity, setTempQuantity] = useState(quantity.toString());
 
-  const snapPoints = useMemo(() => ["60%"], []);
+  // Update local state when item changes
+  useEffect(() => {
+    setQuantity(item.quantity);
+    setUnit(item.unit);
+    setSelectedCategoryId(item.item.category_id);
+  }, [item]);
+
+  const snapPoints = useMemo(() => ["75%"], []);
 
   const handleSheetChanges = useCallback((index: number) => {
     console.log("handleSheetChanges", index);
@@ -42,15 +63,13 @@ export function ItemBottomSheet({
 
   const handleUnitChange = useCallback(
     (newUnit: Unit) => {
-      setSelectedUnit(newUnit);
-      if (
-        PRECISE_UNITS.includes(newUnit) !== PRECISE_UNITS.includes(selectedUnit)
-      ) {
+      setUnit(newUnit);
+      if (PRECISE_UNITS.includes(newUnit) !== PRECISE_UNITS.includes(unit)) {
         setQuantity(1);
         setTempQuantity("1");
       }
     },
-    [selectedUnit]
+    [unit]
   );
 
   const handlePreciseQuantityChange = useCallback((value: string) => {
@@ -61,9 +80,45 @@ export function ItemBottomSheet({
 
   const handleSave = useCallback(() => {
     const finalQuantity = Math.max(1, quantity);
-    onUpdate(finalQuantity, selectedUnit);
+    onUpdate(finalQuantity, unit);
+
+    // Update category if changed
+    if (selectedCategoryId !== item.item.category_id) {
+      console.log(
+        "Updating category from",
+        item.item.category_id,
+        "to",
+        selectedCategoryId
+      );
+      updateItemCategory.mutate(
+        {
+          itemId: item.item.id,
+          categoryId: selectedCategoryId || "",
+        },
+        {
+          onSuccess: () => {
+            console.log("Category updated successfully");
+          },
+          onError: (error) => {
+            console.error("Error updating category:", error);
+          },
+        }
+      );
+    }
+
     bottomSheetRef.current?.dismiss();
-  }, [quantity, selectedUnit, onUpdate]);
+  }, [
+    quantity,
+    unit,
+    onUpdate,
+    selectedCategoryId,
+    item.item.category_id,
+    updateItemCategory,
+  ]);
+
+  const handleCategorySelect = (categoryId: string) => {
+    setSelectedCategoryId(categoryId);
+  };
 
   const renderBackdrop = useCallback(
     (props: any) => (
@@ -78,7 +133,7 @@ export function ItemBottomSheet({
     []
   );
 
-  const isPreciseUnit = PRECISE_UNITS.includes(selectedUnit);
+  const isPreciseUnit = PRECISE_UNITS.includes(unit);
 
   return (
     <BottomSheetModal
@@ -92,7 +147,7 @@ export function ItemBottomSheet({
       enablePanDownToClose={true}
       style={styles.bottomSheet}
     >
-      <BottomSheetView style={{ flex: 1 }}>
+      <BottomSheetScrollView contentContainerStyle={{ flexGrow: 1 }}>
         <View className="px-4 flex-1">
           <Text variant="semibold" className="text-2xl mb-6 text-primary-1">
             {item.item?.name}
@@ -158,28 +213,25 @@ export function ItemBottomSheet({
           </View>
 
           {/* Unit Selector */}
-          <View className="mb-4">
+          <View className="mb-6">
             <Text variant="medium" className="mb-4 text-white">
               Einheit
             </Text>
             <View className="flex-row flex-wrap gap-3">
-              {UNITS.map((unit) => (
-                <TouchableOpacity
-                  key={unit}
-                  onPress={() => handleUnitChange(unit)}
-                >
+              {UNITS.map((u) => (
+                <TouchableOpacity key={u} onPress={() => handleUnitChange(u)}>
                   <View
                     className={`h-14 px-6 rounded-xl items-center justify-center ${
-                      selectedUnit === unit ? "bg-primary-1" : "bg-[#1E2B49]"
+                      unit === u ? "bg-primary-1" : "bg-[#1E2B49]"
                     }`}
                   >
                     <Text
                       variant="semibold"
                       className={`text-lg ${
-                        selectedUnit === unit ? "text-white" : "text-black-3"
+                        unit === u ? "text-white" : "text-black-3"
                       }`}
                     >
-                      {unit}
+                      {u}
                     </Text>
                   </View>
                 </TouchableOpacity>
@@ -187,16 +239,65 @@ export function ItemBottomSheet({
             </View>
           </View>
 
+          {/* Category Selector */}
+          <View className="mb-6">
+            <Text variant="medium" className="mb-4 text-white">
+              Kategorie
+            </Text>
+            {categories && categories.length > 0 ? (
+              <View className="flex-row flex-wrap gap-3">
+                {categories.map((category) => (
+                  <TouchableOpacity
+                    key={category.id}
+                    onPress={() => handleCategorySelect(category.id)}
+                  >
+                    <View
+                      className={`h-14 px-4 rounded-xl items-center justify-center flex-row ${
+                        selectedCategoryId === category.id
+                          ? "bg-primary-1"
+                          : "bg-[#1E2B49]"
+                      }`}
+                    >
+                      <CategoryIcon
+                        icon={category.icon}
+                        size={16}
+                        color={
+                          selectedCategoryId === category.id ? "white" : "#666"
+                        }
+                      />
+                      <Text
+                        variant="semibold"
+                        className={`text-lg ml-2 ${
+                          selectedCategoryId === category.id
+                            ? "text-white"
+                            : "text-black-3"
+                        }`}
+                      >
+                        {category.name}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ) : (
+              <View className="h-14 bg-[#1E2B49] rounded-xl items-center justify-center">
+                <Text variant="medium" className="text-black-3">
+                  Kategorien werden geladen...
+                </Text>
+              </View>
+            )}
+          </View>
+
           {/* Save Button */}
-          <View className=" bg-primary-1 py-3 rounded-xl items-center mt-4">
+          <View className="bg-primary-1 py-3 rounded-xl items-center mt-4">
             <TouchableOpacity onPress={handleSave}>
-              <Text variant="semibold" className=" uppercase">
+              <Text variant="semibold" className="uppercase">
                 SPEICHERN
               </Text>
             </TouchableOpacity>
           </View>
         </View>
-      </BottomSheetView>
+      </BottomSheetScrollView>
     </BottomSheetModal>
   );
 }

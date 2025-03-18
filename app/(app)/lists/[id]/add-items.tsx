@@ -7,7 +7,7 @@ import {
   Keyboard,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   useItems,
   useAddItemToList,
@@ -16,6 +16,7 @@ import {
 import { ItemSelector } from "@/components/lists/ItemSelector";
 import { Ionicons } from "@expo/vector-icons";
 import { Item } from "@/types/database.types";
+import { useCategories, guessCategoryForItem } from "@/hooks/useCategories";
 
 export default function AddItemsScreen() {
   const router = useRouter();
@@ -25,6 +26,8 @@ export default function AddItemsScreen() {
   const { data: items, isLoading } = useItems(debouncedSearchText);
   const addItemToList = useAddItemToList();
   const createCustomItem = useCreateCustomItem();
+  const inputRef = useRef<TextInput>(null);
+  const { data: categories } = useCategories();
 
   const [selectedItems, setSelectedItems] = useState<
     Record<string, { quantity: number; notes?: string }>
@@ -53,6 +56,11 @@ export default function AddItemsScreen() {
   // Virtuelles Item für die Anzeige
   const virtualNewItem: Item | null = useMemo(() => {
     if (!newItemExists || !searchText.trim()) return null;
+
+    // Guess category for new item
+    const categoryName = guessCategoryForItem(searchText.trim());
+    const category = categories?.find((cat) => cat.name === categoryName);
+
     return {
       id: "new-item-temp",
       name: searchText.trim(),
@@ -60,8 +68,10 @@ export default function AddItemsScreen() {
       created_at: new Date().toISOString(),
       created_by: "",
       is_custom: true,
+      category_id: category?.id,
+      category: category,
     };
-  }, [newItemExists, searchText]);
+  }, [newItemExists, searchText, categories]);
 
   const handleSelectItem = (item: Item) => {
     // Ignoriere Klicks auf das virtuelle neue Item
@@ -107,8 +117,21 @@ export default function AddItemsScreen() {
 
     try {
       setError(null);
+      Keyboard.dismiss(); // Tastatur ausblenden
+
+      // Suchtext leeren, bevor die API-Aufrufe starten
+      const itemNameToCreate = searchText.trim();
+
+      // Guess category for new item
+      const categoryName = guessCategoryForItem(itemNameToCreate);
+      const category = categories?.find((cat) => cat.name === categoryName);
+
+      setSearchText("");
+      setDebouncedSearchText("");
+
       const newItem = await createCustomItem.mutateAsync({
-        name: searchText,
+        name: itemNameToCreate,
+        categoryId: category?.id,
       });
 
       // Füge das Item direkt zur Liste hinzu
@@ -118,8 +141,10 @@ export default function AddItemsScreen() {
         quantity: 1,
       });
 
-      // Leere das Suchfeld, aber bleibe auf der Seite
-      setSearchText("");
+      // Nach kurzer Verzögerung Tastatur wieder anzeigen
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 300);
     } catch (err) {
       setError(
         "Fehler beim Erstellen des Items. Bitte versuchen Sie es erneut."
@@ -156,6 +181,7 @@ export default function AddItemsScreen() {
         </TouchableOpacity>
         <View className="flex-1 flex-row items-center bg-black-2 rounded-lg px-4 py-2">
           <TextInput
+            ref={inputRef}
             className="flex-1 text-white font-rubik"
             placeholder="Artikel"
             placeholderTextColor="#666"
@@ -225,7 +251,12 @@ export default function AddItemsScreen() {
             onPress={handleCreateItem}
             className="bg-primary-1 w-14 h-14 rounded-full items-center justify-center"
           >
-            <Ionicons name="checkmark" size={24} color="white" />
+            <Ionicons
+              name="checkmark-sharp"
+              size={30}
+              color="white"
+              weight="bold"
+            />
           </TouchableOpacity>
         </View>
       )}
@@ -237,7 +268,12 @@ export default function AddItemsScreen() {
             onPress={handleAddItems}
             className="bg-primary-1 w-14 h-14 rounded-full items-center justify-center"
           >
-            <Ionicons name="checkmark" size={24} color="white" />
+            <Ionicons
+              name="checkmark-sharp"
+              size={30}
+              color="white"
+              weight="bold"
+            />
           </TouchableOpacity>
         </View>
       )}

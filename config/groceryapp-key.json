@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "groceryapp-454021",
+  "private_key_id": "3224b408d11b1010a7971f81c9543dd1738cf50c",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCdNNnFAMqnFqcv\nRy13ODVY/Y2VhfzXmfSQk59Jq2Z9+rHJr/e7Zl66MyPQB6v399fgQ3gVjNyexBka\nMDMZKt61VEhlaBkBuScNJCadNsaic4FivIlbv3bgQtIJAh6QHnAK9erZf0LlHKy/\nr9W2cDMyp2WnkMOWU6/kChIKMJ6HK8Mqu7YziKn/zYyZ7EjGp2GOq9aaE9AVzt33\ncvRX7aY60X+RtLab8dSOlSE00Fg0vqd8jB1kDt42zhGWP8tvP6QMPEl1i6bf2Jv9\nRsYa7HtqEBzzK+S8vwpoK+PqGX3i2ywrFQQzyuPEluRvaHiS8egObv7uNgi4ZA5R\nMr7SgC8TAgMBAAECggEAGP6yMTRzBCYB5u52OCJjuQZ3YHKxRMZhsCsIhHoQDa+y\nXNLxnIYmQYyoAQd3PDHXzPxtN1/yI/wh0ZwgQ7whNMt1x0nJ0BBUOS6qRQzUgDfF\nNqGrZT8H85gsNOp1WYy9W8DF2lb1l9/7R275l8w3F7Kt4vqNXnVn3eYMADrCudLn\nhl0JISGVQ/NUvScUFBe+OdhpXLBm736YIwSXZcEJUoNr/88v7cEhFBSCkh38am5+\n5cPasMI0LQtB8l8IcPm5pXVtHMHwt8atIkKWKQHE8CN6wDLHabkzDSPB+XJp4J6S\nHTWiG/lee0Gcvheoa9Ulhtl7wCKPZXS0NWfo7GKqIQKBgQDVfeGFwEG+m+7Sk/hi\nuWe83yRUV4gUjstvzkv6/2jtfT0n06m0BP+w6HECJV3BXxBPFBRjjG9yOiABOorO\nIcjdWdzwjtwOI85Ect9/5gnAH+wZo5nSsIlB5XqSNtoj6cVV+1aWaMNv2vdAOBcP\ngYS9vRWIbdDB5UvOnBMtDwwjvwKBgQC8gf3f6W6pNwsH194NSGm+yYG676iiRh2t\nmu8YifBaT8pt32CcqGmRrz3NuXIJHYuGMlmkstjKP7c6YP1Y5HSl5M8eRusD6GBO\n3qE+pks+7Y7Do1wHt3vuSblNDUFuiSRQWD0FSjTkhH+z8mtK6THGeRNt0FUr5cOY\nZVK2UEm5rQKBgEozeEC+c5tGIxl5aGkXu6B/hebyjU9n2flAIFRalSOF1c2T2XXC\nDwRzpWNzjUR6P/bcKcH3u3xeC2Wh7UB7qY6Vfx706DLZ6wULT/bqAxWNgsfefsYl\nqW8HzTQocGTvCTE7K/sW6mZkGm9tj0ZKY9J2d5d1Y4sgoNpskJWmlzeNAoGAQ11A\n2E+XGClva7IczCpgf6mLDr6uSK8909hWMTK6DcwNzw3QfKtCbqltMKNguRkxzxcX\nKeAv0LbMR7R5VNbvSIln6q31NkRIhmbQwI60vRwvtIIgVTGgvBrkeUCPbWzc6Ulf\nJRDLrg4bhLbQ2MhU3VRPOSMGDNXi/AbZdAVlE1ECgYBvNtgI/JFFOH5Z3T/HsXoC\nlsqWaia7wFv8tUaC8Qn4n01AfEPuVEShCsMEjFID64P5Lm1Unf5YFziAw3TZZKnf\nac/rPCDfbaP1aaTnIK0en6AWk9DVqeTW4GzF0I6zUENr4LVBMPz1GeWOyUy17FLI\n9WJpoX1RsGh37Ikm/vcKdw==\n-----END PRIVATE KEY-----\n",
+  "client_email": "cloud-vision-user@groceryapp-454021.iam.gserviceaccount.com",
+  "client_id": "100788702756753019396",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/cloud-vision-user%40groceryapp-454021.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}

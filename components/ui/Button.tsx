@@ -1,50 +1,62 @@
-import { Text, TouchableOpacity, TouchableOpacityProps } from "react-native";
-import { twMerge } from "tailwind-merge";
+import React from "react";
+import {
+  TouchableOpacity,
+  TouchableOpacityProps,
+  ActivityIndicator,
+} from "react-native";
+import { Text } from "./Text";
+import { cn } from "@/lib/utils";
 
-interface ButtonProps extends TouchableOpacityProps {
-  variant?: "primary" | "secondary" | "outline";
-  size?: "sm" | "md" | "lg";
+export interface ButtonProps extends TouchableOpacityProps {
   children: React.ReactNode;
+  variant?: "primary" | "secondary" | "outline" | "ghost";
+  fullWidth?: boolean;
+  isLoading?: boolean;
 }
 
-const variantStyles = {
-  primary: "bg-blue-500 active:bg-blue-600",
-  secondary: "bg-gray-500 active:bg-gray-600",
-  outline: "border border-gray-300 active:bg-gray-100",
-};
-
-const sizeStyles = {
-  sm: "px-3 py-1.5",
-  md: "px-4 py-2",
-  lg: "px-6 py-3",
-};
-
-export function Button({
-  variant = "primary",
-  size = "md",
-  className,
+export const Button = ({
   children,
+  className,
+  variant = "primary",
+  fullWidth = false,
+  isLoading = false,
+  disabled,
   ...props
-}: ButtonProps) {
+}: ButtonProps) => {
+  const variantClasses = {
+    primary: "bg-primary-1",
+    secondary: "bg-slate-700",
+    outline: "border border-slate-700",
+    ghost: "bg-transparent",
+  };
+
   return (
     <TouchableOpacity
-      className={twMerge(
-        "rounded-lg items-center justify-center",
-        variantStyles[variant],
-        sizeStyles[size],
-        variant === "outline" ? "border-2" : "",
+      className={cn(
+        "p-3 rounded-lg",
+        variantClasses[variant],
+        fullWidth ? "w-full" : "",
+        disabled || isLoading ? "opacity-50" : "",
         className
       )}
+      disabled={disabled || isLoading}
       {...props}
     >
-      <Text
-        className={twMerge(
-          "font-medium",
-          variant === "outline" ? "text-gray-700" : "text-white"
-        )}
-      >
-        {children}
-      </Text>
+      {isLoading ? (
+        <ActivityIndicator size="small" color="white" />
+      ) : (
+        <Text
+          variant="medium"
+          className={cn(
+            "text-center",
+            variant === "outline" || variant === "ghost"
+              ? "text-slate-700"
+              : "text-white"
+          )}
+        >
+          {children}
+        </Text>
+      )}
     </TouchableOpacity>
   );
-}
+};

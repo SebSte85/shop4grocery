@@ -61,7 +61,12 @@ export function ListItem({ item }: { item: ListItemType }) {
   };
 
   const handlePress = () => {
-    bottomSheetRef.current?.present();
+    console.log("Opening bottom sheet for item:", item.item.name);
+    if (bottomSheetRef.current) {
+      bottomSheetRef.current.present();
+    } else {
+      console.error("bottomSheetRef is null");
+    }
   };
 
   const handleUpdate = (quantity: number, unit: Unit) => {

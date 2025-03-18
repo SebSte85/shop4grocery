@@ -5,12 +5,14 @@ import { ListItem } from "@/components/lists/ListItem";
 import { useList, useDeleteList } from "@/hooks/useLists";
 import { TouchableOpacity, ScrollView } from "react-native-gesture-handler";
 import { Ionicons } from "@expo/vector-icons";
-import { ShoppingList } from "@/types/database.types";
+import { ShoppingList, ListItem as ListItemType } from "@/types/database.types";
 import { Image } from "react-native";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { useCreateShoppingSession } from "@/hooks/useShoppingSessions";
 import LottieView from "lottie-react-native";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
+import { useCategories, useInitializeCategories } from "@/hooks/useCategories";
+import { CategoryIcon } from "@/components/ui/CategoryIcon";
 
 export default function ListScreen() {
   const router = useRouter();
@@ -23,6 +25,21 @@ export default function ListScreen() {
   const createShoppingSession = useCreateShoppingSession();
   const cartAnimationRef = useRef<LottieView>(null);
   const [isCompletingSession, setIsCompletingSession] = useState(false);
+  const { data: categories, isLoading: categoriesLoading } = useCategories();
+  const initializeCategories = useInitializeCategories();
+
+  // Initialize categories if they don't exist
+  useEffect(() => {
+    console.log("Initializing categories...");
+    initializeCategories.mutate(undefined, {
+      onSuccess: () => {
+        console.log("Categories initialized successfully");
+      },
+      onError: (error) => {
+        console.error("Error initializing categories:", error);
+      },
+    });
+  }, []);
 
   const handleDeleteList = () => {
     Alert.alert("Liste löschen", "Möchtest du diese Liste wirklich löschen?", [
@@ -57,7 +74,7 @@ export default function ListScreen() {
     });
   };
 
-  if (isLoading) {
+  if (isLoading || categoriesLoading) {
     return (
       <View className="flex-1 bg-black-1 items-center justify-center">
         <Text variant="medium">Laden...</Text>
@@ -77,6 +94,29 @@ export default function ListScreen() {
 
   const uncheckedItems = list.items?.filter((item) => !item.is_checked) || [];
   const checkedItems = list.items?.filter((item) => item.is_checked) || [];
+
+  // Group unchecked items by category
+  const groupedUncheckedItems: Record<string, ListItemType[]> = {};
+
+  // First, group items by category_id
+  uncheckedItems.forEach((item) => {
+    const categoryId = item.item.category_id || "uncategorized";
+    if (!groupedUncheckedItems[categoryId]) {
+      groupedUncheckedItems[categoryId] = [];
+    }
+    groupedUncheckedItems[categoryId].push(item);
+  });
+
+  // Sort categories by their order
+  const sortedCategoryIds = Object.keys(groupedUncheckedItems).sort((a, b) => {
+    const categoryA = categories?.find((cat) => cat.id === a);
+    const categoryB = categories?.find((cat) => cat.id === b);
+
+    if (!categoryA) return 1;
+    if (!categoryB) return -1;
+
+    return categoryA.order - categoryB.order;
+  });
 
   // Prüfe, ob der "Einkauf fertig" Button angezeigt werden soll
   const showCompleteButton =
@@ -98,6 +138,18 @@ export default function ListScreen() {
   };
 
   const logoUrl = getLogoUrl();
+
+  // Helper function to get category icon
+  const getCategoryIcon = (categoryId: string) => {
+    const category = categories?.find((cat) => cat.id === categoryId);
+    return category?.icon || "cart";
+  };
+
+  // Helper function to get category name
+  const getCategoryName = (categoryId: string) => {
+    const category = categories?.find((cat) => cat.id === categoryId);
+    return category?.name || "Sonstiges";
+  };
 
   return (
     <BottomSheetModalProvider>
@@ -146,17 +198,31 @@ export default function ListScreen() {
           className="flex-1 px-4"
           showsVerticalScrollIndicator={false}
         >
-          {/* Unchecked Items */}
+          {/* Unchecked Items by Category */}
           {uncheckedItems.length > 0 && (
             <View className="mb-6">
               <Text variant="medium" className="mb-2">
                 Noch zu kaufen
               </Text>
-              <View className="space-y-2">
-                {uncheckedItems.map((item) => (
-                  <ListItem key={item.id} item={item} />
-                ))}
-              </View>
+
+              {sortedCategoryIds.map((categoryId) => (
+                <View key={categoryId} className="mb-4">
+                  <View className="flex-row items-center  mb-2">
+                    <CategoryIcon
+                      icon={getCategoryIcon(categoryId)}
+                      size={18}
+                    />
+                    <Text variant="medium" className="text-primary-1 ml-2">
+                      {getCategoryName(categoryId)}
+                    </Text>
+                  </View>
+                  <View className="space-y-2">
+                    {groupedUncheckedItems[categoryId].map((item) => (
+                      <ListItem key={item.id} item={item} />
+                    ))}
+                  </View>
+                </View>
+              ))}
             </View>
           )}
 
@@ -191,7 +257,7 @@ export default function ListScreen() {
               <View className="flex-1 mr-3">
                 <TouchableOpacity
                   onPress={handleCompleteShoppingSession}
-                  className="bg-primary-1 p-4 rounded-xl w-full flex-row justify-center items-center"
+                  className="bg-primary-1 h-14 rounded-xl w-full flex-row justify-center items-center"
                   disabled={isCompletingSession}
                 >
                   <Text
@@ -209,7 +275,7 @@ export default function ListScreen() {
                         justifyContent: "center",
                       }}
                     >
-                      <Ionicons name="cart-outline" size={28} color="white" />
+                      <Ionicons name="cart" size={30} color="white" />
                     </View>
                   )}
                   {isCompletingSession && (
@@ -224,7 +290,7 @@ export default function ListScreen() {
                       <LottieView
                         ref={cartAnimationRef}
                         source={require("../../../../assets/animations/Cart.json")}
-                        style={{ width: 56, height: 56 }}
+                        style={{ width: 50, height: 50 }}
                         loop={false}
                         autoPlay={true}
                         speed={0.7}
@@ -253,7 +319,9 @@ export default function ListScreen() {
               onPress={() => router.push(`/lists/${id}/add-items`)}
               className="bg-primary-1 w-14 h-14 rounded-full items-center justify-center shadow-lg"
             >
-              <Ionicons name="add" size={30} color="white" />
+              <Text variant="bold" className="text-2xl text-white">
+                +
+              </Text>
             </TouchableOpacity>
           </View>
         )}

@@ -28,6 +28,15 @@ export default function AppLayout() {
         }}
       />
       <Tabs.Screen
+        name="recipes"
+        options={{
+          title: "Rezepte",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="restaurant" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{
           title: "Profil",

@@ -3,6 +3,7 @@ import { Text } from "@/components/ui/Text";
 import { TouchableOpacity } from "react-native-gesture-handler";
 import { ShoppingList } from "@/types/database.types";
 import { SupermarketLogo } from "@/components/ui/SupermarketLogo";
+import { useStoreShoppingCount } from "@/hooks/useStoreStats";
 
 interface ListCardProps {
   list: ShoppingList;
@@ -15,6 +16,9 @@ export function ListCard({ list, onPress }: ListCardProps) {
   const totalItems = list.items?.length || 0;
   const progress = totalItems > 0 ? (completedItems / totalItems) * 100 : 0;
 
+  // Anzahl der Einkäufe für diesen Supermarkt abrufen
+  const { data: shoppingCount } = useStoreShoppingCount(list.name);
+
   return (
     <TouchableOpacity onPress={onPress} className="mb-4">
       <View className="bg-black-2 p-4 rounded-xl">
@@ -23,8 +27,15 @@ export function ListCard({ list, onPress }: ListCardProps) {
             <Text variant="semibold" className="text-lg">
               {list.name}
             </Text>
-            <View className="ml-4">
+            <View className="flex-row items-center ml-3">
               <SupermarketLogo name={list.name} size={24} />
+              {shoppingCount !== undefined && shoppingCount > 0 && (
+                <View className=" bg-black-1 px-2 py-1 rounded-full ml-3">
+                  <Text variant="medium" className="text-xs text-primary-1">
+                    {shoppingCount}x
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
           <Text variant="medium" className="text-primary-1">

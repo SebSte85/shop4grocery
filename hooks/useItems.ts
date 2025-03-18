@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { Item } from "@/types/database.types";
 import { useAuth } from "./useAuth";
+import { guessCategoryForItem } from "./useCategories";
 
 // Hook zum Abrufen der häufigsten Items des Benutzers aus abgeschlossenen Einkaufssessions
 export function useUserPopularItems(limit: number = 20) {
@@ -102,6 +103,7 @@ interface AddItemToListData {
   itemId: string;
   quantity: number;
   notes?: string;
+  categoryId?: string; // Optional category ID for updating
 }
 
 export function useAddItemToList() {
@@ -110,6 +112,19 @@ export function useAddItemToList() {
   return useMutation({
     mutationFn: async (data: AddItemToListData) => {
       console.log("Adding item to list with data:", data);
+
+      // If categoryId is provided, update the item's category
+      if (data.categoryId) {
+        const { error: updateError } = await supabase
+          .from("items")
+          .update({ category_id: data.categoryId })
+          .eq("id", data.itemId);
+
+        if (updateError) {
+          console.error("Error updating item category:", updateError);
+          throw updateError;
+        }
+      }
 
       const { error } = await supabase.from("list_items").insert([
         {
@@ -131,6 +146,7 @@ export function useAddItemToList() {
     onSuccess: (_, variables) => {
       console.log("Invalidating queries for list:", variables.listId);
       queryClient.invalidateQueries({ queryKey: ["list", variables.listId] });
+      queryClient.invalidateQueries({ queryKey: ["items"] });
     },
     onError: (error) => {
       console.error("Mutation error in useAddItemToList:", error);
@@ -140,6 +156,7 @@ export function useAddItemToList() {
 
 interface CreateCustomItemData {
   name: string;
+  categoryId?: string; // Optional category ID
 }
 
 export function useCreateCustomItem() {
@@ -148,56 +165,48 @@ export function useCreateCustomItem() {
 
   return useMutation({
     mutationFn: async (data: CreateCustomItemData) => {
-      try {
-        console.log("Creating custom item with name:", data.name);
+      if (!user) throw new Error("User not authenticated");
 
-        // Zuerst prüfen, ob das Item bereits existiert
-        const { data: existingItems, error: searchError } = await supabase
-          .from("items")
-          .select("*")
-          .ilike("name", data.name.trim())
-          .limit(1);
+      // Guess category if not provided
+      let categoryId = data.categoryId;
+      if (!categoryId) {
+        const categoryName = guessCategoryForItem(data.name);
+        if (categoryName) {
+          // Find category ID by name
+          const { data: categoryData, error: categoryError } = await supabase
+            .from("categories")
+            .select("id")
+            .eq("name", categoryName)
+            .single();
 
-        if (searchError) {
-          console.error("Error searching for existing item:", searchError);
-          throw searchError;
+          if (!categoryError && categoryData) {
+            categoryId = categoryData.id;
+          }
         }
-
-        console.log("Existing items found:", existingItems);
-
-        if (existingItems && existingItems.length > 0) {
-          console.log("Returning existing item:", existingItems[0]);
-          return existingItems[0];
-        }
-
-        // Wenn nicht, erstellen wir ein neues Item
-        const { data: newItem, error: insertError } = await supabase
-          .from("items")
-          .insert([
-            {
-              name: data.name.trim(),
-              is_popular: false,
-              is_custom: true,
-              created_by: user?.id,
-            },
-          ])
-          .select()
-          .single();
-
-        if (insertError) {
-          console.error("Error creating new item:", insertError);
-          throw new Error("Fehler beim Erstellen des Items");
-        }
-
-        console.log("Successfully created new item:", newItem);
-        return newItem;
-      } catch (err) {
-        console.error("Error in createCustomItem:", err);
-        throw err;
       }
+
+      const { data: item, error } = await supabase
+        .from("items")
+        .insert([
+          {
+            name: data.name,
+            is_popular: false,
+            created_by: user.id,
+            is_custom: true,
+            category_id: categoryId,
+          },
+        ])
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Error in useCreateCustomItem:", error);
+        throw error;
+      }
+
+      return item;
     },
-    onSuccess: (data) => {
-      console.log("Custom item creation successful:", data);
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["items"] });
     },
     onError: (error) => {

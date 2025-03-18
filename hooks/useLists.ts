@@ -42,7 +42,8 @@ export function useLists() {
                 is_popular,
                 created_at,
                 created_by,
-                is_custom
+                is_custom,
+                category_id
               )
             )
           `
@@ -174,7 +175,8 @@ export function useList(id: string) {
                 is_popular,
                 created_at,
                 created_by,
-                is_custom
+                is_custom,
+                category_id
               )
             )
           `

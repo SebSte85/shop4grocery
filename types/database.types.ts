@@ -40,6 +40,15 @@ export interface Item {
   created_at: string;
   created_by: string;
   is_custom: boolean;
+  category_id?: string;
+  category?: Category;
+}
+
+export interface Category {
+  id: string;
+  name: string;
+  icon: string;
+  order: number;
 }
 
 export interface ShoppingSession {
@@ -67,4 +76,5 @@ export interface Database {
   shopping_lists: ShoppingList;
   list_items: ListItem;
   items: Item;
+  categories: Category;
 }
