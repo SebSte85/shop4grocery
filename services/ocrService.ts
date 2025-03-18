@@ -165,19 +165,73 @@ function parseIngredientLines(lines: string[]): ExtractedIngredient[] {
         return null;
       }
 
-      // Regulärer Ausdruck für deutsche Zutatenformate
-      // Erkennt:
-      // - Zahlen (auch mit Dezimalpunkt oder Komma)
-      // - Brüche (1/2, 3/4, etc.)
-      // - Maßeinheiten (g, kg, ml, l, EL, TL, Prise, Stück, etc.)
-      // - Den Rest als Zutatennamen
-      const regex =
-        /^((?:\d+[\d\/\.,]*\s*[-–]?\s*\d*\/?\d*)|(?:\d*\/\d+))?\s*([a-zA-ZäöüÄÖÜß]+\.?)?\s*(.+)$/;
+      // Spezielle Vorverarbeitung für Fälle wie "1 gelbe Paprika"
+      // Prüfe zuerst, ob die Zeile mit einer Zahl beginnt
+      const numberMatch = line.match(/^(\d+[\d\/\.,]*)\s+(.+)$/);
+      
+      if (numberMatch) {
+        const [_, quantity, rest] = numberMatch;
+        
+        // Versuche Einheiten wie "g", "kg", "ml" usw. zu erkennen
+        const unitMatch = rest.match(/^([a-zA-ZäöüÄÖÜß]+\.?)\s+(.+)$/);
+        
+        if (unitMatch) {
+          // Wenn eine Einheit erkannt wurde
+          const [_, possibleUnit, restWithUnit] = unitMatch;
+          
+          // Prüfe, ob es sich um eine bekannte Einheit handelt
+          const knownUnits = ['g', 'gr', 'gramm', 'kg', 'ml', 'milliliter', 'l', 'liter', 
+                              'el', 'EL', 'esslöffel', 'tl', 'TL', 'teelöffel', 'stück', 'stk', 'prise'];
+          
+          if (knownUnits.includes(possibleUnit.toLowerCase())) {
+            // Es ist eine bekannte Einheit
+            return {
+              id: `ingredient-${index}`,
+              name: restWithUnit.trim(),
+              quantity: quantity.trim(),
+              unit: standardizeUnit(possibleUnit),
+            };
+          } else {
+            // Es ist keine bekannte Einheit, wahrscheinlich Teil des Namens wie "gelbe Paprika"
+            // Verwende die gesamte Beschreibung nach der Zahl als Name
+            return {
+              id: `ingredient-${index}`,
+              name: rest.trim(),
+              quantity: quantity.trim(),
+              unit: "Stück", // Standardeinheit für Zutaten ohne explizite Einheit
+            };
+          }
+        } else {
+          // Keine Einheit gefunden, nur Zahl und Name
+          return {
+            id: `ingredient-${index}`,
+            name: rest.trim(),
+            quantity: quantity.trim(),
+            unit: "Stück", // Standardeinheit für Zutaten ohne explizite Einheit
+          };
+        }
+      }
 
+      // Fallback zum komplexeren Regex-Ansatz für andere Fälle
+      const regex = /^((?:\d+[\d\/\.,]*\s*[-–]?\s*\d*\/?\d*)|(?:\d*\/\d+))?\s*([a-zA-ZäöüÄÖÜß]+(\.|\s|$)?)?\s*(.+)$/;
       const match = line.match(regex);
 
       if (match) {
-        const [_, quantity, unit, name] = match;
+        let [_, quantity, unit, name] = match;
+        
+        // Wenn kein Name erkannt wurde, könnte der letzte Teil der Einheit der Name sein
+        if (!name && unit) {
+          const parts = unit.split(' ');
+          if (parts.length > 1) {
+            unit = parts[0];
+            name = parts.slice(1).join(' ');
+          }
+        }
+
+        // Normalisiere die Einheit
+        if (unit) {
+          unit = standardizeUnit(unit);
+        }
 
         // Entferne "Optional:" oder ähnliche Präfixe vom Namen
         let cleanName = name?.trim() || line.trim();
@@ -200,6 +254,36 @@ function parseIngredientLines(lines: string[]): ExtractedIngredient[] {
       };
     })
     .filter(Boolean) as ExtractedIngredient[]; // Filtere null-Werte
+}
+
+// Hilfsfunktion zur Standardisierung von Einheiten
+function standardizeUnit(unit: string): string {
+  if (!unit) return "";
+  
+  unit = unit.trim().replace(/\.$/, '');
+  
+  // Standardisiere Einheiten
+  const unitMap: Record<string, string> = {
+    'g': 'g',
+    'gr': 'g',
+    'gramm': 'g',
+    'kg': 'kg',
+    'ml': 'ml',
+    'milliliter': 'ml',
+    'l': 'l',
+    'liter': 'l',
+    'el': 'EL',
+    'EL': 'EL',
+    'esslöffel': 'EL',
+    'tl': 'TL',
+    'TL': 'TL',
+    'teelöffel': 'TL',
+    'stück': 'Stück',
+    'stk': 'Stück',
+    'prise': 'Prise',
+  };
+  
+  return unitMap[unit.toLowerCase()] || unit;
 }
 
 // Hilfsfunktion zur Umwandlung eines Blobs in Base64

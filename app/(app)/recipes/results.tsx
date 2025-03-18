@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { View, TouchableOpacity, Alert, ActivityIndicator } from "react-native";
 import { Text } from "@/components/ui/Text";
 import { ScrollView } from "react-native-gesture-handler";
@@ -19,6 +19,7 @@ import { useAddItemToList, useCreateCustomItem } from "@/hooks/useItems";
 import { useCategories } from "@/hooks/useCategories";
 import { Platform } from "react-native";
 import * as FileSystem from "expo-file-system";
+import { ListSelectorBottomSheet } from "@/components/recipes/ListSelectorBottomSheet";
 
 export default function RecipeResultsScreen() {
   const router = useRouter();
@@ -98,7 +99,14 @@ export default function RecipeResultsScreen() {
   };
 
   const openListSelector = () => {
-    bottomSheetModalRef.current?.present();
+    console.log("[DEBUG] Öffne Listen-Auswahl Bottom Sheet");
+    if (bottomSheetModalRef.current) {
+      console.log("[DEBUG] BottomSheet Ref existiert, rufe present() auf");
+      // Mit animate:true Option aufrufen, um Probleme mit "Reduced Motion" zu umgehen
+      bottomSheetModalRef.current.present({ animate: true });
+    } else {
+      console.error("[DEBUG] BottomSheet Ref ist null");
+    }
   };
 
   const handleAddToList = async () => {
@@ -108,6 +116,7 @@ export default function RecipeResultsScreen() {
     }
 
     const selectedIngredients = ingredients.filter((i) => i.selected);
+    console.log("[DEBUG] Ausgewählte Zutaten:", selectedIngredients.length);
 
     if (selectedIngredients.length === 0) {
       Alert.alert(
@@ -118,10 +127,16 @@ export default function RecipeResultsScreen() {
     }
 
     setIsAddingToList(true);
+    console.log("[DEBUG] Ausgewählte Liste ID:", selectedListId);
 
     try {
-      const addPromises = selectedIngredients.map(async (ingredient) => {
+      console.log("[DEBUG] Beginne mit dem Hinzufügen der Zutaten");
+      const addPromises = selectedIngredients.map(async (ingredient, index) => {
         try {
+          console.log(
+            `[DEBUG] Verarbeite Zutat ${index + 1}:`,
+            ingredient.name
+          );
           const itemName = ingredient.name;
           let unitText = "";
 
@@ -132,37 +147,55 @@ export default function RecipeResultsScreen() {
           }
 
           const fullItemName = unitText ? `${itemName} ${unitText}` : itemName;
+          console.log(`[DEBUG] Vollständiger Itemname: ${fullItemName}`);
 
           const categoryName = categories?.find((cat) =>
             itemName.toLowerCase().includes(cat.name.toLowerCase())
           );
+          console.log(
+            `[DEBUG] Gefundene Kategorie:`,
+            categoryName?.name || "keine"
+          );
 
+          console.log(`[DEBUG] Erstelle neues Item: ${fullItemName}`);
           const newItem = await createCustomItem.mutateAsync({
             name: fullItemName,
             categoryId: categoryName?.id,
           });
+          console.log(`[DEBUG] Item erstellt, ID: ${newItem.id}`);
 
+          console.log(`[DEBUG] Füge Item zur Liste hinzu: ${selectedListId}`);
           await addItemToList.mutateAsync({
             listId: selectedListId,
             itemId: newItem.id,
             quantity: 1,
           });
+          console.log(`[DEBUG] Item erfolgreich zur Liste hinzugefügt`);
 
           return true;
         } catch (error) {
-          console.error("Fehler beim Hinzufügen der Zutat:", error);
+          console.error(
+            `[DEBUG] Fehler beim Hinzufügen der Zutat ${ingredient.name}:`,
+            error
+          );
           return false;
         }
       });
 
-      await Promise.all(addPromises);
+      console.log("[DEBUG] Warte auf alle Promises");
+      const results = await Promise.all(addPromises);
+      console.log("[DEBUG] Ergebnisse:", results);
+      const successCount = results.filter(Boolean).length;
+      console.log(
+        `[DEBUG] ${successCount} von ${selectedIngredients.length} Zutaten erfolgreich hinzugefügt`
+      );
 
       setIsAddingToList(false);
       bottomSheetModalRef.current?.close();
 
       Alert.alert(
         "Zutaten hinzugefügt",
-        `${selectedIngredients.length} Zutaten wurden zur Liste hinzugefügt.`,
+        `${successCount} Zutaten wurden zur Liste hinzugefügt.`,
         [
           {
             text: "OK",
@@ -173,7 +206,7 @@ export default function RecipeResultsScreen() {
         ]
       );
     } catch (error) {
-      console.error("Fehler beim Hinzufügen der Zutaten:", error);
+      console.error("[DEBUG] Fehler beim Hinzufügen der Zutaten:", error);
       setIsAddingToList(false);
 
       Alert.alert(
@@ -274,12 +307,12 @@ export default function RecipeResultsScreen() {
                     }`}
                   >
                     <View className="flex-1">
-                      <Text variant="medium">{ingredient.name}</Text>
-                      {ingredient.quantity && (
-                        <Text variant="light" className="text-black-3">
-                          {ingredient.quantity} {ingredient.unit}
-                        </Text>
-                      )}
+                      <Text variant="semibold" className="text-lg">
+                        {ingredient.name}
+                      </Text>
+                      <Text variant="light" className="text-black-3 mt-1">
+                        {ingredient.quantity || ""} {ingredient.unit || ""}
+                      </Text>
                     </View>
                     <Ionicons
                       name={
@@ -300,8 +333,15 @@ export default function RecipeResultsScreen() {
               <View className="flex-row items-center">
                 <View className="flex-1 mr-3">
                   <TouchableOpacity
-                    onPress={openListSelector}
-                    className="bg-primary-1 h-14 rounded-xl w-full flex-row justify-center items-center"
+                    onPress={() => {
+                      console.log(
+                        "[DEBUG] Button gedrückt, versuche Sheet zu öffnen"
+                      );
+                      openListSelector();
+                    }}
+                    className={`bg-primary-1 h-14 rounded-xl w-full flex-row justify-center items-center ${
+                      selectedCount === 0 ? "opacity-50" : ""
+                    }`}
                     disabled={selectedCount === 0}
                   >
                     <Text
@@ -318,74 +358,16 @@ export default function RecipeResultsScreen() {
           </>
         )}
 
-        {/* Bottom Sheet für Listenauswahl */}
-        <BottomSheetModal
-          ref={bottomSheetModalRef}
-          index={0}
-          snapPoints={["50%"]}
-          backgroundStyle={{ backgroundColor: "#011A38" }}
-          handleIndicatorStyle={{ backgroundColor: "#64748B" }}
-        >
-          <View className="flex-1 p-4">
-            <Text variant="semibold" className="text-xl mb-4">
-              Liste auswählen
-            </Text>
-
-            {listsLoading ? (
-              <ActivityIndicator size="small" color="#8B5CF6" />
-            ) : (
-              <>
-                <ScrollView className="flex-1">
-                  {lists && lists.length > 0 ? (
-                    lists.map((list) => (
-                      <TouchableOpacity
-                        key={list.id}
-                        onPress={() => setSelectedListId(list.id)}
-                        className={`p-4 mb-2 rounded-xl flex-row items-center justify-between ${
-                          selectedListId === list.id
-                            ? "bg-primary-1/10"
-                            : "bg-black-2"
-                        }`}
-                      >
-                        <Text variant="medium">{list.name}</Text>
-                        {selectedListId === list.id && (
-                          <Ionicons
-                            name="checkmark"
-                            size={24}
-                            color="#8B5CF6"
-                          />
-                        )}
-                      </TouchableOpacity>
-                    ))
-                  ) : (
-                    <Text variant="medium" className="text-center text-black-3">
-                      Keine Listen vorhanden
-                    </Text>
-                  )}
-                </ScrollView>
-
-                <TouchableOpacity
-                  onPress={handleAddToList}
-                  className="bg-primary-1 p-4 rounded-xl mt-4"
-                  disabled={isAddingToList}
-                >
-                  {isAddingToList ? (
-                    <View className="flex-row justify-center items-center">
-                      <ActivityIndicator size="small" color="white" />
-                      <Text variant="medium" className="text-white ml-2">
-                        Wird hinzugefügt...
-                      </Text>
-                    </View>
-                  ) : (
-                    <Text variant="medium" className="text-white text-center">
-                      Hinzufügen
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              </>
-            )}
-          </View>
-        </BottomSheetModal>
+        {/* Bottom Sheet für Listenauswahl - Jetzt als eigene Komponente */}
+        <ListSelectorBottomSheet
+          bottomSheetRef={bottomSheetModalRef}
+          lists={lists}
+          listsLoading={listsLoading}
+          selectedListId={selectedListId}
+          setSelectedListId={setSelectedListId}
+          isAddingToList={isAddingToList}
+          onAddToList={handleAddToList}
+        />
       </View>
     </BottomSheetModalProvider>
   );
