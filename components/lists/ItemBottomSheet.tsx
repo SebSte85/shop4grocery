@@ -33,20 +33,21 @@ export function ItemBottomSheet({
   item,
   onUpdate,
 }: ItemBottomSheetProps) {
-  const [quantity, setQuantity] = useState(item.quantity);
-  const [unit, setUnit] = useState<Unit>(item.unit);
+  const [quantity, setQuantity] = useState(item.quantity || 1);
+  const [unit, setUnit] = useState<Unit>(item.unit || "Stück");
   const { data: categories } = useCategories();
   const updateItemCategory = useUpdateItemCategory();
   const [selectedCategoryId, setSelectedCategoryId] = useState<
     string | undefined
   >(item.item.category_id);
-  const [tempQuantity, setTempQuantity] = useState(quantity.toString());
+  const [tempQuantity, setTempQuantity] = useState(String(quantity || 1));
 
   // Update local state when item changes
   useEffect(() => {
-    setQuantity(item.quantity);
-    setUnit(item.unit);
+    setQuantity(item.quantity || 1);
+    setUnit(item.unit || "Stück");
     setSelectedCategoryId(item.item.category_id);
+    setTempQuantity(String(item.quantity || 1));
   }, [item]);
 
   const snapPoints = useMemo(() => ["75%"], []);

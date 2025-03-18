@@ -1,17 +1,30 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, TouchableOpacity, Image, Alert, Platform } from "react-native";
 import { Text } from "@/components/ui/Text";
 import { ScrollView } from "react-native-gesture-handler";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { Button } from "@/components/ui/Button";
 
 export default function RecipesScreen() {
   const router = useRouter();
   const [image, setImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Reset isLoading when screen is focused (when returning from another screen)
+  useFocusEffect(
+    React.useCallback(() => {
+      console.log(
+        "[DEBUG] RecipesScreen is focused, resetting isLoading state"
+      );
+      setIsLoading(false);
+      return () => {
+        // Cleanup function when screen is unfocused
+      };
+    }, [])
+  );
 
   // Hilfsfunktion zum Kopieren des Bildes in einen sicheren, bekannten Pfad
   const copyImageToSafeLocation = async (uri: string): Promise<string> => {
@@ -114,6 +127,11 @@ export default function RecipesScreen() {
     }
   };
 
+  const resetImage = () => {
+    setImage(null);
+    setIsLoading(false); // Stelle sicher, dass isLoading zurückgesetzt wird
+  };
+
   const analyzeRecipe = async () => {
     if (!image) return;
 
@@ -154,7 +172,7 @@ export default function RecipesScreen() {
 
               <View className="flex-row">
                 <TouchableOpacity
-                  onPress={() => setImage(null)}
+                  onPress={resetImage}
                   className="bg-red-500 p-3 rounded-lg mr-2 flex-1"
                 >
                   <Text variant="medium" className="text-white text-center">
@@ -210,13 +228,19 @@ export default function RecipesScreen() {
           <Text variant="medium" className="mb-2">
             Wie funktioniert's?
           </Text>
-          <Text variant="light" className="text-black-3 mb-2">
+          <Text
+            variant="light"
+            className="text-black-3 mb-2 rubik-font-semibold"
+          >
             1. Wähle ein Bild deines Rezepts aus oder mache ein Foto
           </Text>
-          <Text variant="light" className="text-black-3 mb-2">
+          <Text
+            variant="light"
+            className="text-black-3 mb-2 rubik-font-semibold"
+          >
             2. Unsere Texterkennung extrahiert die Zutaten
           </Text>
-          <Text variant="light" className="text-black-3">
+          <Text variant="light" className="text-black-3 rubik-font-semibold">
             3. Füge die Zutaten deiner Einkaufsliste hinzu
           </Text>
         </View>

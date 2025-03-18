@@ -138,15 +138,9 @@ export default function RecipeResultsScreen() {
             ingredient.name
           );
           const itemName = ingredient.name;
-          let unitText = "";
 
-          if (ingredient.quantity && ingredient.unit) {
-            unitText = `(${ingredient.quantity} ${ingredient.unit})`;
-          } else if (ingredient.quantity) {
-            unitText = `(${ingredient.quantity})`;
-          }
-
-          const fullItemName = unitText ? `${itemName} ${unitText}` : itemName;
+          // Direkter Itemname ohne Klammern
+          const fullItemName = itemName;
           console.log(`[DEBUG] Vollständiger Itemname: ${fullItemName}`);
 
           const categoryName = categories?.find((cat) =>
@@ -168,7 +162,11 @@ export default function RecipeResultsScreen() {
           await addItemToList.mutateAsync({
             listId: selectedListId,
             itemId: newItem.id,
-            quantity: 1,
+            quantity: ingredient.quantity ? Number(ingredient.quantity) : 1,
+            unit: ingredient.unit || "Stück",
+            notes: ingredient.unit
+              ? `Erkannt als: ${ingredient.quantity} ${ingredient.unit}`
+              : "",
           });
           console.log(`[DEBUG] Item erfolgreich zur Liste hinzugefügt`);
 
@@ -190,21 +188,32 @@ export default function RecipeResultsScreen() {
         `[DEBUG] ${successCount} von ${selectedIngredients.length} Zutaten erfolgreich hinzugefügt`
       );
 
+      // Entferne hinzugefügte Items aus der Liste
+      const selectedIds = selectedIngredients.map((item) => item.id);
+
+      // Prüfe, ob alle Items ausgewählt wurden
+      const allItemsSelected =
+        ingredients.length === selectedIngredients.length;
+
+      setIngredients((prevIngredients) =>
+        prevIngredients.filter((item) => !selectedIds.includes(item.id))
+      );
+
       setIsAddingToList(false);
       bottomSheetModalRef.current?.close();
 
-      Alert.alert(
-        "Zutaten hinzugefügt",
-        `${successCount} Zutaten wurden zur Liste hinzugefügt.`,
-        [
-          {
-            text: "OK",
-            onPress: () => {
-              router.push(`/lists/${selectedListId}`);
-            },
-          },
-        ]
-      );
+      // Setze die Auswahl zurück
+      setSelectedListId(null);
+
+      // Wenn alle Items hinzugefügt wurden, zurück zur Hauptseite navigieren
+      if (allItemsSelected) {
+        console.log(
+          "[DEBUG] Alle Items wurden hinzugefügt, navigiere zurück zur Hauptseite"
+        );
+        setTimeout(() => {
+          router.replace("/");
+        }, 300);
+      }
     } catch (error) {
       console.error("[DEBUG] Fehler beim Hinzufügen der Zutaten:", error);
       setIsAddingToList(false);
@@ -281,9 +290,10 @@ export default function RecipeResultsScreen() {
               <View className="flex-row justify-between mb-4">
                 <TouchableOpacity
                   onPress={selectAllIngredients}
-                  className="bg-black-2 py-2 px-4 rounded-lg"
+                  className="bg-primary-1/20 py-2 px-4 rounded-lg flex-row items-center"
                 >
-                  <Text variant="medium" className="text-primary-1">
+                  <Ionicons name="checkmark-circle" size={18} color="#8B5CF6" />
+                  <Text variant="medium" className="text-primary-1 ml-2">
                     Alle auswählen
                   </Text>
                 </TouchableOpacity>
@@ -296,6 +306,23 @@ export default function RecipeResultsScreen() {
                   </Text>
                 </TouchableOpacity>
               </View>
+
+              {/* Shortcut Button: Alle auswählen und zur Liste */}
+              <TouchableOpacity
+                onPress={() => {
+                  selectAllIngredients();
+                  // Kurze Verzögerung, damit die UI-Aktualisierung sichtbar ist
+                  setTimeout(() => {
+                    openListSelector();
+                  }, 100);
+                }}
+                className="bg-primary-1/10 p-4 rounded-xl mb-4 flex-row items-center justify-center"
+              >
+                <Ionicons name="flash" size={22} color="#8B5CF6" />
+                <Text variant="medium" className="text-primary-1 ml-2">
+                  Alle Zutaten direkt zur Liste hinzufügen
+                </Text>
+              </TouchableOpacity>
 
               <View className="space-y-2 mb-20">
                 {ingredients.map((ingredient) => (

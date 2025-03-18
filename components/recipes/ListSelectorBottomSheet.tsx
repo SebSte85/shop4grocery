@@ -125,7 +125,7 @@ export function ListSelectorBottomSheet({
               ) : (
                 <Text
                   variant="medium"
-                  className={`text-white text-center ${
+                  className={`text-white text-center uppercase ${
                     !selectedListId ? "opacity-50" : ""
                   }`}
                 >

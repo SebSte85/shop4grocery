@@ -165,6 +165,35 @@ function parseIngredientLines(lines: string[]): ExtractedIngredient[] {
         return null;
       }
 
+      // Überprüfe, ob die aktuelle Zeile nur eine Menge und Einheit enthält (nächste Zeile wäre dann der Name)
+      // Z.B. "100g" oder "100 g" alleine in einer Zeile
+      const unitOnlyMatch = line.match(/^(\d+[\d\/\.,]*)\s*([a-zäöüßA-ZÄÖÜ]+)?$/);
+      
+      // Wenn die aktuelle Zeile nur Menge und Einheit enthält und es eine nächste Zeile gibt
+      if (unitOnlyMatch && index < lines.length - 1) {
+        const [_, quantity, possibleUnit] = unitOnlyMatch;
+        // Nächste Zeile enthält vermutlich den Namen der Zutat
+        const nextLine = lines[index + 1].trim();
+        
+        // Prüfe, ob die nächste Zeile nicht selbst eine Menge/Einheit ist
+        const nextLineIsIngredient = !nextLine.match(/^(\d+[\d\/\.,]*)\s*([a-zäöüßA-ZÄÖÜ]+)?\s/);
+        
+        if (nextLineIsIngredient && !nextLine.match(/^[0-9]/)) {
+          // Markiere die nächste Zeile zum Überspringen
+          lines[index + 1] = ""; // Dies wird später durch den filter(Boolean) entfernt
+          
+          // Standardisiere die Einheit, wenn vorhanden
+          const unit = possibleUnit ? standardizeUnit(possibleUnit) : detectUnitFromValue(quantity);
+          
+          return {
+            id: `ingredient-${index}`,
+            name: nextLine,
+            quantity: quantity.trim(),
+            unit: unit,
+          };
+        }
+      }
+
       // Spezielle Vorverarbeitung für Fälle wie "1 gelbe Paprika"
       // Prüfe zuerst, ob die Zeile mit einer Zahl beginnt
       const numberMatch = line.match(/^(\d+[\d\/\.,]*)\s+(.+)$/);
@@ -172,7 +201,7 @@ function parseIngredientLines(lines: string[]): ExtractedIngredient[] {
       if (numberMatch) {
         const [_, quantity, rest] = numberMatch;
         
-        // Versuche Einheiten wie "g", "kg", "ml" usw. zu erkennen
+        // Verbesserte Erkennung von Einheiten, besonders für "g" und "kg"
         const unitMatch = rest.match(/^([a-zA-ZäöüÄÖÜß]+\.?)\s+(.+)$/);
         
         if (unitMatch) {
@@ -198,16 +227,30 @@ function parseIngredientLines(lines: string[]): ExtractedIngredient[] {
               id: `ingredient-${index}`,
               name: rest.trim(),
               quantity: quantity.trim(),
-              unit: "Stück", // Standardeinheit für Zutaten ohne explizite Einheit
+              unit: detectUnitFromValue(quantity), // Intelligentere Einheitenerkennung
             };
           }
         } else {
+          // Spezialfall: Prüfe auf Gewichtsangaben ohne Leerzeichen, z.B. "100g Linsen"
+          const weightMatch = rest.match(/^([a-zA-Z]+)(.+)$/);
+          if (weightMatch) {
+            const [_, possibleWeightUnit, nameAfterUnit] = weightMatch;
+            if (['g', 'kg', 'ml', 'l'].includes(possibleWeightUnit.toLowerCase())) {
+              return {
+                id: `ingredient-${index}`,
+                name: nameAfterUnit.trim(),
+                quantity: quantity.trim(),
+                unit: standardizeUnit(possibleWeightUnit),
+              };
+            }
+          }
+          
           // Keine Einheit gefunden, nur Zahl und Name
           return {
             id: `ingredient-${index}`,
             name: rest.trim(),
             quantity: quantity.trim(),
-            unit: "Stück", // Standardeinheit für Zutaten ohne explizite Einheit
+            unit: detectUnitFromValue(quantity), // Intelligentere Einheitenerkennung
           };
         }
       }
@@ -231,6 +274,9 @@ function parseIngredientLines(lines: string[]): ExtractedIngredient[] {
         // Normalisiere die Einheit
         if (unit) {
           unit = standardizeUnit(unit);
+        } else if (quantity) {
+          // Wenn keine Einheit erkannt wurde, versuche eine zu ermitteln
+          unit = detectUnitFromValue(quantity);
         }
 
         // Entferne "Optional:" oder ähnliche Präfixe vom Namen
@@ -254,6 +300,29 @@ function parseIngredientLines(lines: string[]): ExtractedIngredient[] {
       };
     })
     .filter(Boolean) as ExtractedIngredient[]; // Filtere null-Werte
+}
+
+// Neue Hilfsfunktion zur Erkennung von Einheiten anhand des Werts
+function detectUnitFromValue(value: string): string {
+  if (!value) return "Stück";
+  
+  // Wenn der Wert kleiner als 10 ist, handelt es sich wahrscheinlich um Stücke
+  const numValue = parseFloat(value.replace(',', '.'));
+  
+  if (isNaN(numValue)) return "Stück";
+  
+  // Bei kleinen ganzen Zahlen (1-5) nehmen wir meist "Stück" an
+  if (numValue <= 5 && Number.isInteger(numValue)) {
+    return "Stück";
+  }
+  
+  // Bei größeren Zahlen (> 10) oder Dezimalzahlen nehmen wir eher Gewicht an
+  if (numValue > 10 || !Number.isInteger(numValue)) {
+    return "g";
+  }
+  
+  // Im Zweifelsfall Stück
+  return "Stück";
 }
 
 // Hilfsfunktion zur Standardisierung von Einheiten

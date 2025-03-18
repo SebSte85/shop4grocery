@@ -102,6 +102,7 @@ interface AddItemToListData {
   listId: string;
   itemId: string;
   quantity: number;
+  unit?: string; // Einheit für das Item
   notes?: string;
   categoryId?: string; // Optional category ID for updating
 }
@@ -131,6 +132,7 @@ export function useAddItemToList() {
           list_id: data.listId,
           item_id: data.itemId,
           quantity: data.quantity,
+          unit: data.unit || "Stück", // Verwende Standard-Einheit, wenn keine angegeben
           notes: data.notes,
           is_checked: false,
         },
