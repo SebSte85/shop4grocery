@@ -1,33 +1,35 @@
 import { View, Text, TouchableOpacity } from "react-native";
 import { useRouter, Link } from "expo-router";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Input } from "@/components/ui/Input";
 import { useAuth } from "@/hooks/useAuth";
 import { AuthError } from "@supabase/supabase-js";
+import LottieView from "lottie-react-native";
+import { Ionicons } from "@expo/vector-icons";
 
-const registerSchema = z
-  .object({
-    fullName: z.string().min(2, "Name muss mindestens 2 Zeichen lang sein"),
-    email: z.string().email("Ungültige E-Mail-Adresse"),
-    password: z.string().min(6, "Passwort muss mindestens 6 Zeichen lang sein"),
-    confirmPassword: z.string(),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: "Passwörter stimmen nicht überein",
-    path: ["confirmPassword"],
-  });
+const registerSchema = z.object({
+  email: z.string().email("Ungültige E-Mail-Adresse"),
+  password: z.string().min(6, "Passwort muss mindestens 6 Zeichen lang sein"),
+});
 
 type RegisterFormData = z.infer<typeof registerSchema>;
 
 export default function RegisterScreen() {
   const router = useRouter();
-  const { signUp } = useAuth();
+  const { signUp, signInWithGoogle } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const animationRef = useRef<LottieView>(null);
+
+  useEffect(() => {
+    if (animationRef.current) {
+      animationRef.current.play();
+    }
+  }, []);
 
   const {
     control,
@@ -57,7 +59,7 @@ export default function RegisterScreen() {
       setError(null);
       setSuccess(null);
       setIsLoading(true);
-      await signUp(data.email, data.password, data.fullName);
+      await signUp(data.email, data.password);
       setSuccess(
         "Registrierung erfolgreich! Bitte überprüfen Sie Ihre E-Mails für die Bestätigung."
       );
@@ -70,42 +72,66 @@ export default function RegisterScreen() {
     }
   };
 
+  const handleGoogleSignUp = async () => {
+    try {
+      console.log("[Register] Google Sign-Up Button clicked");
+      setError(null);
+      setIsLoading(true);
+      console.log("[Register] Calling signInWithGoogle...");
+      const result = await signInWithGoogle();
+      console.log("[Register] signInWithGoogle result:", result);
+    } catch (err) {
+      console.error("[Register] Google Sign-Up Error:", err);
+      setError(
+        "Fehler bei der Google-Registrierung. Bitte versuchen Sie es später erneut."
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <View className="flex-1 bg-black-1 p-4">
       <View className="flex-1 justify-center">
+        <LottieView
+          ref={animationRef}
+          source={require("@/assets/animations/Signup.json")}
+          style={{ height: 200, marginBottom: 20 }}
+          autoPlay
+          loop
+        />
         <Text className="text-white font-rubik text-3xl mb-8 text-center">
-          Registrierung
+          Registrieren
         </Text>
 
         <View className="space-y-4">
           <Controller
             control={control}
-            name="fullName"
-            render={({ field: { onChange, value } }) => (
-              <Input
-                placeholder="Vollständiger Name"
-                value={value}
-                onChangeText={onChange}
-                autoCapitalize="words"
-                error={errors.fullName?.message}
-                editable={!isLoading}
-              />
-            )}
-          />
-
-          <Controller
-            control={control}
             name="email"
             render={({ field: { onChange, value } }) => (
-              <Input
-                placeholder="E-Mail"
-                value={value}
-                onChangeText={onChange}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                error={errors.email?.message}
-                editable={!isLoading}
-              />
+              <View className="relative">
+                <Ionicons
+                  name="mail-outline"
+                  size={20}
+                  color="#8b5cf6"
+                  style={{
+                    position: "absolute",
+                    left: 12,
+                    top: 14,
+                    zIndex: 10,
+                  }}
+                />
+                <Input
+                  placeholder="E-Mail"
+                  value={value}
+                  onChangeText={onChange}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  error={errors.email?.message}
+                  editable={!isLoading}
+                  className="font-rubik-semibold mb-2 pl-10"
+                />
+              </View>
             )}
           />
 
@@ -113,29 +139,28 @@ export default function RegisterScreen() {
             control={control}
             name="password"
             render={({ field: { onChange, value } }) => (
-              <Input
-                placeholder="Passwort"
-                value={value}
-                onChangeText={onChange}
-                secureTextEntry
-                error={errors.password?.message}
-                editable={!isLoading}
-              />
-            )}
-          />
-
-          <Controller
-            control={control}
-            name="confirmPassword"
-            render={({ field: { onChange, value } }) => (
-              <Input
-                placeholder="Passwort bestätigen"
-                value={value}
-                onChangeText={onChange}
-                secureTextEntry
-                error={errors.confirmPassword?.message}
-                editable={!isLoading}
-              />
+              <View className="relative">
+                <Ionicons
+                  name="lock-closed-outline"
+                  size={20}
+                  color="#8b5cf6"
+                  style={{
+                    position: "absolute",
+                    left: 12,
+                    top: 14,
+                    zIndex: 10,
+                  }}
+                />
+                <Input
+                  placeholder="Passwort"
+                  value={value}
+                  onChangeText={onChange}
+                  secureTextEntry
+                  error={errors.password?.message}
+                  editable={!isLoading}
+                  className="font-rubik-semibold mb-2 pl-10"
+                />
+              </View>
             )}
           />
 
@@ -158,6 +183,24 @@ export default function RegisterScreen() {
           >
             <Text className="text-white font-rubik text-center">
               {isLoading ? "Registrieren..." : "Registrieren"}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={handleGoogleSignUp}
+            className={`bg-black-2 py-4 rounded-lg flex-row justify-center items-center ${
+              isLoading ? "opacity-50" : ""
+            }`}
+            disabled={isLoading}
+          >
+            <Ionicons
+              name="logo-google"
+              size={20}
+              color="white"
+              style={{ marginRight: 10 }}
+            />
+            <Text className="text-white font-rubik text-center">
+              {isLoading ? "Registrieren..." : "Mit Google registrieren"}
             </Text>
           </TouchableOpacity>
         </View>

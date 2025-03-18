@@ -1,12 +1,14 @@
 import { View, Text, TouchableOpacity } from "react-native";
 import { useRouter, Link } from "expo-router";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Input } from "@/components/ui/Input";
 import { useAuth } from "@/hooks/useAuth";
 import { AuthError } from "@supabase/supabase-js";
+import LottieView from "lottie-react-native";
+import { Ionicons } from "@expo/vector-icons";
 
 const loginSchema = z.object({
   email: z.string().email("Ungültige E-Mail-Adresse"),
@@ -20,6 +22,13 @@ export default function LoginScreen() {
   const { signIn, signInWithGoogle } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const animationRef = useRef<LottieView>(null);
+
+  useEffect(() => {
+    if (animationRef.current) {
+      animationRef.current.play();
+    }
+  }, []);
 
   const {
     control,
@@ -69,8 +78,15 @@ export default function LoginScreen() {
   return (
     <View className="flex-1 bg-black-1 p-4">
       <View className="flex-1 justify-center">
+        <LottieView
+          ref={animationRef}
+          source={require("@/assets/animations/Signin.json")}
+          style={{ height: 200, marginBottom: 20 }}
+          autoPlay
+          loop
+        />
         <Text className="text-white font-rubik text-3xl mb-8 text-center">
-          Shop4Grocery
+          Anmelden
         </Text>
 
         <View className="space-y-4">
@@ -78,15 +94,29 @@ export default function LoginScreen() {
             control={control}
             name="email"
             render={({ field: { onChange, value } }) => (
-              <Input
-                placeholder="E-Mail"
-                value={value}
-                onChangeText={onChange}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                error={errors.email?.message}
-                editable={!isLoading}
-              />
+              <View className="relative">
+                <Ionicons
+                  name="mail-outline"
+                  size={20}
+                  color="#8b5cf6"
+                  style={{
+                    position: "absolute",
+                    left: 12,
+                    top: 14,
+                    zIndex: 10,
+                  }}
+                />
+                <Input
+                  placeholder="E-Mail"
+                  value={value}
+                  onChangeText={onChange}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  error={errors.email?.message}
+                  editable={!isLoading}
+                  className="font-rubik-semibold mb-2 pl-10"
+                />
+              </View>
             )}
           />
 
@@ -94,14 +124,28 @@ export default function LoginScreen() {
             control={control}
             name="password"
             render={({ field: { onChange, value } }) => (
-              <Input
-                placeholder="Passwort"
-                value={value}
-                onChangeText={onChange}
-                secureTextEntry
-                error={errors.password?.message}
-                editable={!isLoading}
-              />
+              <View className="relative">
+                <Ionicons
+                  name="lock-closed-outline"
+                  size={20}
+                  color="#8b5cf6"
+                  style={{
+                    position: "absolute",
+                    left: 12,
+                    top: 14,
+                    zIndex: 10,
+                  }}
+                />
+                <Input
+                  placeholder="Passwort"
+                  value={value}
+                  onChangeText={onChange}
+                  secureTextEntry
+                  error={errors.password?.message}
+                  editable={!isLoading}
+                  className="font-rubik-semibold mb-2 pl-10"
+                />
+              </View>
             )}
           />
 
@@ -123,11 +167,17 @@ export default function LoginScreen() {
 
           <TouchableOpacity
             onPress={handleGoogleSignIn}
-            className={`bg-black-2 py-4 rounded-lg ${
+            className={`bg-black-2 py-4 rounded-lg flex-row justify-center items-center ${
               isLoading ? "opacity-50" : ""
             }`}
             disabled={isLoading}
           >
+            <Ionicons
+              name="logo-google"
+              size={20}
+              color="white"
+              style={{ marginRight: 10 }}
+            />
             <Text className="text-white font-rubik text-center">
               {isLoading ? "Anmelden..." : "Mit Google anmelden"}
             </Text>

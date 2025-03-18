@@ -230,17 +230,17 @@ export default function RecipesScreen() {
           </Text>
           <Text
             variant="light"
-            className="text-black-3 mb-2 rubik-font-semibold"
+            className="text-black-3 mb-2 font-rubik-semibold"
           >
             1. Wähle ein Bild deines Rezepts aus oder mache ein Foto
           </Text>
           <Text
             variant="light"
-            className="text-black-3 mb-2 rubik-font-semibold"
+            className="text-black-3 mb-2 font-rubik-semibold"
           >
             2. Unsere Texterkennung extrahiert die Zutaten
           </Text>
-          <Text variant="light" className="text-black-3 rubik-font-semibold">
+          <Text variant="light" className="text-black-3 font-rubik-semibold">
             3. Füge die Zutaten deiner Einkaufsliste hinzu
           </Text>
         </View>
