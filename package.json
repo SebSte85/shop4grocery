@@ -13,6 +13,7 @@
     "@gorhom/bottom-sheet": "^5.1.2",
     "@hookform/resolvers": "^4.1.3",
     "@react-navigation/native": "^7.0.15",
+    "@stripe/stripe-react-native": "^0.43.0",
     "@supabase/supabase-js": "^2.49.1",
     "@tanstack/react-query": "^5.68.0",
     "clsx": "^2.1.1",

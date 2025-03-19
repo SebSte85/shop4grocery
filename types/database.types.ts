@@ -92,4 +92,20 @@ export interface Database {
   items: Item;
   categories: Category;
   list_shares: ListShare;
+  user_subscriptions: UserSubscription;
+}
+
+export interface UserSubscription {
+  id: string;
+  user_id: string;
+  stripe_customer_id: string;
+  stripe_subscription_id: string;
+  plan: "free" | "premium";
+  status: string;
+  interval: "month" | "year";
+  current_period_start: string;
+  current_period_end: string;
+  created_at: string;
+  updated_at: string;
+  cancel_at_period_end: boolean;
 }

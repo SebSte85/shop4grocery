@@ -5,4 +5,6 @@ export * from './useListShares';
 export * from './useCategories';
 export * from './useItems';
 export * from './useShoppingSessions';
-export * from './useStoreStats'; 
+export * from './useStoreStats';
+export * from './useSubscription';
+export * from './useInitStripe'; 
