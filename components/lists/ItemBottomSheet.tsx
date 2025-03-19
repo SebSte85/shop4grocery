@@ -52,9 +52,7 @@ export function ItemBottomSheet({
 
   const snapPoints = useMemo(() => ["75%"], []);
 
-  const handleSheetChanges = useCallback((index: number) => {
-    console.log("handleSheetChanges", index);
-  }, []);
+  const handleSheetChanges = useCallback((index: number) => {}, []);
 
   const handleQuantityChange = useCallback((newQuantity: number) => {
     if (newQuantity < 1) return;
@@ -85,24 +83,14 @@ export function ItemBottomSheet({
 
     // Update category if changed
     if (selectedCategoryId !== item.item.category_id) {
-      console.log(
-        "Updating category from",
-        item.item.category_id,
-        "to",
-        selectedCategoryId
-      );
       updateItemCategory.mutate(
         {
           itemId: item.item.id,
           categoryId: selectedCategoryId || "",
         },
         {
-          onSuccess: () => {
-            console.log("Category updated successfully");
-          },
-          onError: (error) => {
-            console.error("Error updating category:", error);
-          },
+          onSuccess: () => {},
+          onError: (error) => {},
         }
       );
     }

@@ -19,7 +19,7 @@ type LoginFormData = z.infer<typeof loginSchema>;
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { signIn, signInWithGoogle } = useAuth();
+  const { signIn } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const animationRef = useRef<LottieView>(null);
@@ -56,20 +56,6 @@ export default function LoginScreen() {
       await signIn(data.email, data.password);
     } catch (err) {
       setError(getErrorMessage(err as AuthError));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleGoogleSignIn = async () => {
-    try {
-      setError(null);
-      setIsLoading(true);
-      await signInWithGoogle();
-    } catch (err) {
-      setError(
-        "Fehler bei der Google-Anmeldung. Bitte versuchen Sie es später erneut."
-      );
     } finally {
       setIsLoading(false);
     }
@@ -162,24 +148,6 @@ export default function LoginScreen() {
           >
             <Text className="text-white font-rubik text-center">
               {isLoading ? "Anmelden..." : "Anmelden"}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={handleGoogleSignIn}
-            className={`bg-black-2 py-4 rounded-lg flex-row justify-center items-center ${
-              isLoading ? "opacity-50" : ""
-            }`}
-            disabled={isLoading}
-          >
-            <Ionicons
-              name="logo-google"
-              size={20}
-              color="white"
-              style={{ marginRight: 10 }}
-            />
-            <Text className="text-white font-rubik text-center">
-              {isLoading ? "Anmelden..." : "Mit Google anmelden"}
             </Text>
           </TouchableOpacity>
         </View>

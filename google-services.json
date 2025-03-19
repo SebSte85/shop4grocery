@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "743678779271",
+    "project_id": "grocery-app-412412",
+    "storage_bucket": "grocery-app-412412.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:743678779271:android:PLACEHOLDER",
+        "android_client_info": {
+          "package_name": "com.korbklick"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "743678779271-3gp8ojm8kc62fa19robjj1egg5iv6u.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "PLACEHOLDER"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "743678779271-3gp8ojm8kc62fa19robjj1egg5iv6u.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

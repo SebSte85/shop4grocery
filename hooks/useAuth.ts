@@ -12,12 +12,42 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  // Get the deep link URL from Expo
-  const redirectUrl = Linking.createURL("auth/callback", {
-    scheme: "shop4grocery",
-  });
+  // Dynamische URL-Bestimmung - für Entwicklung oder Produktion
+  const isDevelopment = __DEV__;
+  
+  // In der Entwicklung die lokale URL verwenden, in Produktion Deep-Link-Schema
+  const redirectUrl = isDevelopment 
+    ? "exp://192.168.178.97:8081/--/auth/callback"
+    : "korbklick://auth/callback";
 
-  console.log("[useAuth] Configured redirect URL:", redirectUrl);
+  // In der mobilen App die URL-Schema registrieren
+  useEffect(() => {
+    // Expo-Linking-URL ausgeben zur Prüfung
+    const url = Linking.createURL('/auth/callback');
+  }, []);
+
+  // Füge URL-Listener für Deep Links hinzu
+  useEffect(() => {
+    // Diese Funktion wird aufgerufen, wenn ein Deep Link die App öffnet
+    const handleDeepLink = (event: { url: string }) => {
+      // Hier können Parameter aus der URL extrahiert werden, falls notwendig
+      // Beispiel: const url = new URL(event.url);
+    };
+
+    // URL-Listener registrieren
+    const subscription = Linking.addEventListener("url", handleDeepLink);
+
+    // Initial-URL überprüfen (falls App durch einen Deep Link gestartet wurde)
+    void Linking.getInitialURL().then((url) => {
+      if (url) {
+        handleDeepLink({ url });
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
 
   useEffect(() => {
     // Check active sessions and sets the user
@@ -45,7 +75,8 @@ export function useAuth() {
 
     if (error) throw error;
     if (data.session) {
-      router.replace("/(app)");
+      // Richtige Weiterleitung zur Listen-Seite im App-Bereich
+      router.replace("/(app)/lists");
     }
   };
 
@@ -94,64 +125,6 @@ export function useAuth() {
     router.replace("/(auth)/login");
   };
 
-  const signInWithGoogle = async () => {
-    console.log("[useAuth] signInWithGoogle called");
-    console.log("[useAuth] redirectUrl:", redirectUrl);
-    
-    try {
-      // Für Supabase-OAuth immer die Supabase-URL verwenden, nicht die lokale
-      const finalRedirectUrl = "https://eskortwazxjmjzaqtotg.supabase.co/auth/v1/callback";
-        
-      console.log("[useAuth] Using redirect URL:", finalRedirectUrl);
-      
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: finalRedirectUrl,
-          // In Android & iOS use the native browser
-          skipBrowserRedirect: true,
-        },
-      });
-
-      console.log("[useAuth] signInWithGoogle result:", { data, error, url: data?.url });
-
-      if (error) {
-        console.error("[useAuth] OAuth error:", error);
-        throw error;
-      }
-      
-      if (!data?.url) {
-        console.error("[useAuth] No URL returned from signInWithOAuth");
-        throw new Error("Keine Anmelde-URL von Supabase erhalten");
-      }
-
-      // Öffne den Browser für die Anmeldung
-      console.log("[useAuth] Opening browser with URL:", data.url);
-      
-      if (Platform.OS === "web") {
-        // Im Web-Browser direkt navigieren
-        window.location.href = data.url;
-      } else {
-        // In mobilen Apps WebBrowser verwenden
-        const result = await WebBrowser.openAuthSessionAsync(
-          data.url,
-          redirectUrl
-        );
-        
-        console.log("[useAuth] WebBrowser result:", result);
-        
-        if (result.type !== 'success') {
-          throw new Error("Die Google-Anmeldung wurde abgebrochen");
-        }
-      }
-      
-      return data;
-    } catch (error) {
-      console.error("[useAuth] Exception in signInWithGoogle:", error);
-      throw error;
-    }
-  };
-
   const resetPassword = async (email: string) => {
     const { error } = await supabase.auth.resetPasswordForEmail(
       email.toLowerCase().trim(),
@@ -169,7 +142,7 @@ export function useAuth() {
     signIn,
     signUp,
     signOut,
-    signInWithGoogle,
     resetPassword,
+    supabase,
   };
 }

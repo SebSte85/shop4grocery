@@ -1,12 +1,12 @@
 import { View, ScrollView } from "react-native";
 import { Text } from "@/components/ui/Text";
 import { ListCard } from "@/components/lists/ListCard";
-import { useLists } from "@/hooks/useLists";
+import { useListsWithRealtime } from "@/hooks/useLists";
 import { useRouter, Link } from "expo-router";
 import { TouchableOpacity } from "react-native-gesture-handler";
 
 export default function ListsScreen() {
-  const { data: lists, isLoading } = useLists();
+  const { data: lists, isLoading, isSubscribed } = useListsWithRealtime();
   const router = useRouter();
 
   if (isLoading) {
@@ -19,13 +19,23 @@ export default function ListsScreen() {
 
   return (
     <View className="flex-1 bg-black-1">
-      <View className="p-4">
-        <Text variant="semibold" className="text-3xl text-primary-1">
-          Meine Listen
-        </Text>
-        <Text variant="light" className="text-black-3 mt-1 font-rubik-semibold">
-          Verwalte deine Einkaufslisten
-        </Text>
+      <View className="p-4 flex-row items-center justify-between">
+        <View>
+          <Text variant="semibold" className="text-3xl text-primary-1">
+            Meine Listen
+          </Text>
+          <Text
+            variant="light"
+            className="text-black-3 mt-1 font-rubik-semibold"
+          >
+            Verwalte deine Einkaufslisten
+          </Text>
+        </View>
+        {isSubscribed && (
+          <View className="bg-green-800/30 px-2 py-1 rounded-full">
+            <Text className="text-green-500 text-xs">Live</Text>
+          </View>
+        )}
       </View>
 
       <ScrollView className="flex-1 px-4">

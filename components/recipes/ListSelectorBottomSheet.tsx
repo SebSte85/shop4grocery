@@ -1,141 +1,116 @@
-import React, { useCallback, useMemo } from "react";
-import { View, ActivityIndicator, TouchableOpacity } from "react-native";
-import {
-  BottomSheetModal,
-  BottomSheetBackdrop,
-  BottomSheetScrollView,
-} from "@gorhom/bottom-sheet";
+import React, {
+  useCallback,
+  useRef,
+  useMemo,
+  forwardRef,
+  useImperativeHandle,
+} from "react";
+import { View, TouchableOpacity } from "react-native";
+import BottomSheet, { BottomSheetBackdrop } from "@gorhom/bottom-sheet";
 import { Text } from "@/components/ui/Text";
-import { Ionicons } from "@expo/vector-icons";
+import { useLists } from "@/hooks/useLists";
 import { ShoppingList } from "@/types/database.types";
 
 interface ListSelectorBottomSheetProps {
-  bottomSheetRef: React.RefObject<BottomSheetModal>;
-  lists: ShoppingList[] | undefined;
-  listsLoading: boolean;
-  selectedListId: string | null;
-  setSelectedListId: (id: string) => void;
-  isAddingToList: boolean;
-  onAddToList: () => void;
+  onListSelected: (listId: string) => void;
+  onDismiss?: () => void;
 }
 
-export function ListSelectorBottomSheet({
-  bottomSheetRef,
-  lists,
-  listsLoading,
-  selectedListId,
-  setSelectedListId,
-  isAddingToList,
-  onAddToList,
-}: ListSelectorBottomSheetProps) {
-  // Bottom Sheet Configuration
+export type ListSelectorBottomSheetHandle = {
+  present: () => void;
+  dismiss: () => void;
+};
+
+const ListSelectorBottomSheet = forwardRef<
+  ListSelectorBottomSheetHandle,
+  ListSelectorBottomSheetProps
+>(({ onListSelected, onDismiss }, ref) => {
+  const { data: lists, isLoading } = useLists();
+  const bottomSheetRef = useRef<BottomSheet>(null);
   const snapPoints = useMemo(() => ["50%"], []);
 
-  // Handle backdrop component
+  useImperativeHandle(ref, () => ({
+    present: () => {
+      if (bottomSheetRef.current) {
+        bottomSheetRef.current.expand();
+      }
+    },
+    dismiss: () => {
+      if (bottomSheetRef.current) {
+        bottomSheetRef.current.close();
+      }
+    },
+  }));
+
   const renderBackdrop = useCallback(
     (props: any) => (
       <BottomSheetBackdrop
         {...props}
         disappearsOnIndex={-1}
         appearsOnIndex={0}
-        opacity={0.7}
-        pressBehavior="close"
+        opacity={0.5}
       />
     ),
     []
   );
 
-  // Handle close event
-  const handleClose = useCallback(() => {
-    bottomSheetRef.current?.close();
-  }, [bottomSheetRef]);
+  const handleSelectList = (list: ShoppingList) => {
+    onListSelected(list.id);
+    if (bottomSheetRef.current) {
+      bottomSheetRef.current.close();
+    }
+  };
+
+  const handleSheetChanges = useCallback(
+    (index: number) => {
+      if (index === -1 && onDismiss) {
+        onDismiss();
+      }
+    },
+    [onDismiss]
+  );
 
   return (
-    <BottomSheetModal
+    <BottomSheet
       ref={bottomSheetRef}
-      index={0}
+      index={-1}
       snapPoints={snapPoints}
-      backgroundStyle={{ backgroundColor: "#011A38" }}
-      handleIndicatorStyle={{ backgroundColor: "#64748B" }}
       backdropComponent={renderBackdrop}
-      enablePanDownToClose={true}
-      enableContentPanningGesture={true}
-      keyboardBehavior="extend"
-      onChange={(index) =>
-        console.log("[DEBUG] Bottom sheet index changed:", index)
-      }
-      onDismiss={() =>
-        console.log("[DEBUG] ListSelector BottomSheet dismissed")
-      }
+      enablePanDownToClose
+      onChange={handleSheetChanges}
+      handleIndicatorStyle={{ backgroundColor: "#8B5CF6" }}
+      backgroundStyle={{ backgroundColor: "#121212" }}
     >
-      <View className="flex-1 p-4">
-        <View className="flex-row items-center justify-between mb-4">
-          <Text variant="semibold" className="text-xl">
-            Liste auswählen
+      <View className="p-4 flex-1">
+        <Text variant="semibold" className="text-2xl mb-4 text-primary-1">
+          Wähle eine Liste
+        </Text>
+
+        {isLoading ? (
+          <Text variant="medium" className="text-center py-8 text-white">
+            Laden...
           </Text>
-          <TouchableOpacity onPress={handleClose}>
-            <Ionicons name="close" size={24} color="white" />
-          </TouchableOpacity>
-        </View>
-
-        {listsLoading ? (
-          <ActivityIndicator size="small" color="#8B5CF6" />
-        ) : (
-          <>
-            <BottomSheetScrollView
-              className="flex-1"
-              showsVerticalScrollIndicator={false}
-            >
-              {lists && lists.length > 0 ? (
-                lists.map((list) => (
-                  <TouchableOpacity
-                    key={list.id}
-                    onPress={() => setSelectedListId(list.id)}
-                    className={`p-4 mb-2 rounded-xl flex-row items-center justify-between ${
-                      selectedListId === list.id
-                        ? "bg-primary-1/10"
-                        : "bg-black-2"
-                    }`}
-                  >
-                    <Text variant="medium">{list.name}</Text>
-                    {selectedListId === list.id && (
-                      <Ionicons name="checkmark" size={24} color="#8B5CF6" />
-                    )}
-                  </TouchableOpacity>
-                ))
-              ) : (
-                <Text variant="medium" className="text-center text-black-3">
-                  Keine Listen vorhanden
-                </Text>
-              )}
-            </BottomSheetScrollView>
-
+        ) : lists && lists.length > 0 ? (
+          lists.map((list) => (
             <TouchableOpacity
-              onPress={onAddToList}
-              className="bg-primary-1 p-4 rounded-xl mt-4"
-              disabled={isAddingToList || !selectedListId}
+              key={list.id}
+              className="bg-black-2 py-4 px-4 mb-2 rounded-lg"
+              onPress={() => handleSelectList(list)}
             >
-              {isAddingToList ? (
-                <View className="flex-row justify-center items-center">
-                  <ActivityIndicator size="small" color="white" />
-                  <Text variant="medium" className="text-white ml-2">
-                    Wird hinzugefügt...
-                  </Text>
-                </View>
-              ) : (
-                <Text
-                  variant="medium"
-                  className={`text-white text-center uppercase ${
-                    !selectedListId ? "opacity-50" : ""
-                  }`}
-                >
-                  Hinzufügen
-                </Text>
-              )}
+              <Text variant="medium">{list.name}</Text>
+              <Text variant="light" className="text-black-3 mt-1 text-xs">
+                {list.items?.length || 0} Items
+              </Text>
             </TouchableOpacity>
-          </>
+          ))
+        ) : (
+          <Text variant="medium" className="text-center py-8 text-white">
+            Keine Listen verfügbar
+          </Text>
         )}
       </View>
-    </BottomSheetModal>
+    </BottomSheet>
   );
-}
+});
+
+export default ListSelectorBottomSheet;

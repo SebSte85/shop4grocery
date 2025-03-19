@@ -12,10 +12,13 @@ export interface ShoppingList {
   id: string;
   name: string;
   user_id: string;
+  owner_id?: string;
   created_at: string;
   updated_at: string;
   is_archived: boolean;
+  is_shared?: boolean;
   items: ListItem[];
+  shares?: ListShare[];
 }
 
 export type Unit = "Stück" | "kg" | "g" | "l" | "ml";
@@ -71,10 +74,22 @@ export interface ShoppingSessionItem {
   item?: Item;
 }
 
+export type PermissionLevel = "read" | "write" | "admin";
+
+export interface ListShare {
+  id: string;
+  list_id: string;
+  user_id: string;
+  permission_level: PermissionLevel;
+  created_at: string;
+  user?: User;
+}
+
 export interface Database {
   users: User;
   shopping_lists: ShoppingList;
   list_items: ListItem;
   items: Item;
   categories: Category;
+  list_shares: ListShare;
 }

@@ -61,11 +61,8 @@ export function ListItem({ item }: { item: ListItemType }) {
   };
 
   const handlePress = () => {
-    console.log("Opening bottom sheet for item:", item.item.name);
     if (bottomSheetRef.current) {
       bottomSheetRef.current.present();
-    } else {
-      console.error("bottomSheetRef is null");
     }
   };
 

@@ -1,8 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { ShoppingList, Unit } from "@/types/database.types";
+import { ShoppingList, Unit, PermissionLevel } from "@/types/database.types";
 import { useAuth } from "./useAuth";
 import { useRouter } from "expo-router";
+import { useState, useEffect } from "react";
 
 export function useLists() {
   const { user } = useAuth();
@@ -16,16 +17,19 @@ export function useLists() {
           throw new Error("Benutzer nicht angemeldet");
         }
 
-        const { data, error } = await supabase
+        // Fetch own lists
+        const { data: ownLists, error: ownError } = await supabase
           .from("shopping_lists")
           .select(
             `
             id,
             name,
             user_id,
+            owner_id,
             created_at,
             updated_at,
             is_archived,
+            is_shared,
             items:list_items (
               id,
               list_id,
@@ -52,43 +56,79 @@ export function useLists() {
           .eq("is_archived", false)
           .order("created_at", { ascending: false });
 
-        if (error) {
-          console.error("Error fetching lists:", error);
-          throw new Error("Fehler beim Laden der Listen");
+        if (ownError) {
+          throw new Error("Fehler beim Laden eigener Listen");
         }
 
-        if (!data) {
+        // Get list ids that are shared with the user
+        const { data: sharedListIds, error: sharedIdsError } = await supabase
+          .from("list_shares")
+          .select("list_id")
+          .eq("user_id", user.id);
+
+        if (sharedIdsError) {
+          throw new Error("Fehler beim Laden geteilter Listen-IDs");
+        }
+
+        // If there are no shared lists, just return own lists
+        if (!sharedListIds || sharedListIds.length === 0) {
+          return ownLists ? transformListData(ownLists) : [];
+        }
+
+        // Extract the list IDs
+        const listIds = sharedListIds.map(item => item.list_id);
+
+        // Fetch shared lists
+        const { data: sharedLists, error: sharedError } = await supabase
+          .from("shopping_lists")
+          .select(
+            `
+            id,
+            name,
+            user_id,
+            owner_id,
+            created_at,
+            updated_at,
+            is_archived,
+            is_shared,
+            items:list_items (
+              id,
+              list_id,
+              item_id,
+              quantity,
+              is_checked,
+              created_at,
+              updated_at,
+              notes,
+              unit,
+              item:items!inner (
+                id,
+                name,
+                is_popular,
+                created_at,
+                created_by,
+                is_custom,
+                category_id
+              )
+            )
+          `
+          )
+          .eq("is_archived", false)
+          .in("id", listIds);
+
+        if (sharedError) {
+          throw new Error("Fehler beim Laden geteilter Listen");
+        }
+
+        // Combine lists
+        const allLists = [...(ownLists || []), ...(sharedLists || [])];
+
+        if (!allLists) {
           return [];
         }
 
-        // Transform the data to match the expected types
-        const transformedData: ShoppingList[] = data.map((list) => ({
-          id: list.id,
-          name: list.name,
-          user_id: list.user_id,
-          created_at: list.created_at,
-          updated_at: list.updated_at,
-          is_archived: list.is_archived,
-          items:
-            list.items?.map((listItem) => ({
-              id: listItem.id,
-              list_id: listItem.list_id,
-              item_id: listItem.item_id,
-              quantity: listItem.quantity,
-              unit: listItem.unit || "Stück",
-              is_checked: listItem.is_checked,
-              created_at: listItem.created_at,
-              updated_at: listItem.updated_at,
-              notes: listItem.notes,
-              item: Array.isArray(listItem.item)
-                ? listItem.item[0]
-                : listItem.item,
-            })) || [],
-        }));
-
-        return transformedData;
+        return transformListData(allLists);
       } catch (error) {
-        console.error("Error in useLists:", error);
         throw error;
       }
     },
@@ -96,6 +136,35 @@ export function useLists() {
     staleTime: 1000 * 60,
     retry: 2,
   });
+}
+
+// Helper function to transform list data
+function transformListData(lists: any[]): ShoppingList[] {
+  return lists.map((list) => ({
+    id: list.id,
+    name: list.name,
+    user_id: list.user_id,
+    owner_id: list.owner_id,
+    created_at: list.created_at,
+    updated_at: list.updated_at,
+    is_archived: list.is_archived,
+    is_shared: list.is_shared,
+    items:
+      list.items?.map((listItem: any) => ({
+        id: listItem.id,
+        list_id: listItem.list_id,
+        item_id: listItem.item_id,
+        quantity: listItem.quantity,
+        unit: listItem.unit || "Stück",
+        is_checked: listItem.is_checked,
+        created_at: listItem.created_at,
+        updated_at: listItem.updated_at,
+        notes: listItem.notes,
+        item: Array.isArray(listItem.item)
+          ? listItem.item[0]
+          : listItem.item,
+      })) || [],
+  }));
 }
 
 interface CreateListData {
@@ -125,8 +194,8 @@ export function useCreateList() {
         .single();
 
       if (error) {
-        console.error("Error creating list:", error);
-        throw new Error("Fehler beim Erstellen der Liste");
+        throw new Error("Fehler beim Erstellen der Liste")
+        console.log("Error: ", error)
       }
 
       return newList;
@@ -149,6 +218,37 @@ export function useList(id: string) {
           throw new Error("Benutzer nicht angemeldet");
         }
 
+        // Erst prüfen, ob der Benutzer Zugriff auf die Liste hat
+        const checkAccess = async () => {
+          // Prüfe, ob der Benutzer der Besitzer ist
+          const { data: ownList, error: ownError } = await supabase
+            .from("shopping_lists")
+            .select("id")
+            .eq("id", id)
+            .eq("user_id", user.id)
+            .maybeSingle();
+
+          if (ownList) {
+            return true;
+          }
+
+          // Prüfe, ob die Liste mit dem Benutzer geteilt wurde
+          const { data: sharedList, error: sharedError } = await supabase
+            .from("list_shares")
+            .select("id")
+            .eq("list_id", id)
+            .eq("user_id", user.id)
+            .maybeSingle();
+
+          return !!sharedList;
+        };
+
+        const hasAccess = await checkAccess();
+        if (!hasAccess) {
+          throw new Error("Liste nicht gefunden");
+        }
+
+        // Wenn der Benutzer Zugriff hat, lade die Liste ohne user_id Filter
         const { data, error } = await supabase
           .from("shopping_lists")
           .select(
@@ -179,14 +279,12 @@ export function useList(id: string) {
                 category_id
               )
             )
-          `
+            `
           )
           .eq("id", id)
-          .eq("user_id", user.id)
           .single();
 
         if (error) {
-          console.error("Error fetching list:", error);
           throw new Error("Fehler beim Laden der Liste");
         }
 
@@ -219,11 +317,8 @@ export function useList(id: string) {
             })) || [],
         };
 
-        "📦 Transformed list data:", transformedData;
-
         return transformedData;
       } catch (error) {
-        console.error("Error in useList:", error);
         throw error;
       }
     },
@@ -387,7 +482,6 @@ export function useDeleteList() {
         .single();
 
       if (fetchError) {
-        console.error("Error fetching list:", fetchError);
         throw new Error("Fehler beim Laden der Liste");
       }
 
@@ -402,7 +496,6 @@ export function useDeleteList() {
         .eq("id", listId);
 
       if (error) {
-        console.error("Error deleting list:", error);
         throw new Error("Fehler beim Löschen der Liste");
       }
 
@@ -413,4 +506,141 @@ export function useDeleteList() {
       router.replace("/lists");
     },
   });
+}
+
+// New hook for list with realtime updates
+export function useListWithRealtime(id: string) {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const [isSubscribed, setIsSubscribed] = useState(false);
+
+  // Standard useList hook for initial data
+  const listQuery = useList(id);
+
+  // Setup realtime subscription
+  useEffect(() => {
+    if (!id || !user?.id) return;
+
+    // Subscribe to list changes
+    const listSubscription = supabase
+      .channel(`list-${id}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'shopping_lists',
+        filter: `id=eq.${id}`,
+      }, () => {
+        queryClient.invalidateQueries({ queryKey: ['list', id] });
+      })
+      .subscribe();
+
+    // Subscribe to list items changes
+    const itemsSubscription = supabase
+      .channel(`list-items-${id}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'list_items',
+        filter: `list_id=eq.${id}`,
+      }, () => {
+        queryClient.invalidateQueries({ queryKey: ['list', id] });
+      })
+      .subscribe();
+
+    // Subscribe to list shares changes
+    const sharesSubscription = supabase
+      .channel(`list-shares-${id}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'list_shares',
+        filter: `list_id=eq.${id}`,
+      }, () => {
+        queryClient.invalidateQueries({ queryKey: ['list', id] });
+        queryClient.invalidateQueries({ queryKey: ['list-shares', id] });
+      })
+      .subscribe();
+
+    setIsSubscribed(true);
+
+    return () => {
+      listSubscription.unsubscribe();
+      itemsSubscription.unsubscribe();
+      sharesSubscription.unsubscribe();
+      setIsSubscribed(false);
+    };
+  }, [id, user?.id, queryClient]);
+
+  return {
+    ...listQuery,
+    isSubscribed,
+  };
+}
+
+// New hook for lists with realtime updates
+export function useListsWithRealtime() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const [isSubscribed, setIsSubscribed] = useState(false);
+
+  // Standard useLists hook for initial data
+  const listsQuery = useLists();
+
+  // Setup realtime subscription
+  useEffect(() => {
+    if (!user?.id) return;
+
+    // Subscribe to shopping_lists changes for this user
+    const listsSubscription = supabase
+      .channel(`user-lists-${user.id}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'shopping_lists',
+        filter: `user_id=eq.${user.id}`,
+      }, () => {
+        queryClient.invalidateQueries({ queryKey: ['lists'] });
+      })
+      .subscribe();
+
+    // Subscribe to list_shares changes for this user
+    const sharesSubscription = supabase
+      .channel(`user-shares-${user.id}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'list_shares',
+        filter: `user_id=eq.${user.id}`,
+      }, () => {
+        queryClient.invalidateQueries({ queryKey: ['lists'] });
+      })
+      .subscribe();
+
+    // General subscription to all list_items changes
+    // Wir können nicht nach spezifischen list_ids filtern, da wir hier mehrere Listen haben
+    const itemsSubscription = supabase
+      .channel(`all-list-items`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'list_items',
+      }, () => {
+        queryClient.invalidateQueries({ queryKey: ['lists'] });
+      })
+      .subscribe();
+
+    setIsSubscribed(true);
+
+    return () => {
+      listsSubscription.unsubscribe();
+      sharesSubscription.unsubscribe();
+      itemsSubscription.unsubscribe();
+      setIsSubscribed(false);
+    };
+  }, [user?.id, queryClient]);
+
+  return {
+    ...listsQuery,
+    isSubscribed,
+  };
 }

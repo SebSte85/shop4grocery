@@ -1,18 +1,44 @@
 {
   "expo": {
-    "scheme": "shop4grocery",
+    "scheme": "korbklick",
     "web": {
       "bundler": "metro"
     },
     "plugins": ["expo-router", "expo-secure-store"],
-    "name": "Shop4Grocery",
-    "slug": "shop4grocery",
+    "name": "Korbklick",
+    "slug": "korbklick",
     "android": {
-      "package": "com.shop4grocery"
+      "package": "com.korbklick",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "korbklick"
+            },
+            {
+              "scheme": "https",
+              "host": "korbklick.de"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     "ios": {
-      "bundleIdentifier": "com.shop4grocery"
+      "bundleIdentifier": "com.korbklick",
+      "associatedDomains": ["applinks:korbklick.de"]
     },
-    "newArchEnabled": true
+    "newArchEnabled": true,
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "ec2bf361-232b-4556-8277-adb67a8a1468"
+      }
+    },
+    "owner": "sebastianstemmer"
   }
 }

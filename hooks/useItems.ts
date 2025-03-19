@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, UseMutationOptions } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { Item } from "@/types/database.types";
 import { useAuth } from "./useAuth";
@@ -13,11 +13,8 @@ export function useUserPopularItems(limit: number = 20) {
     queryFn: async () => {
       try {
         if (!user?.id) {
-          console.log("useUserPopularItems: Kein Benutzer angemeldet");
           return [];
         }
-
-        console.log("useUserPopularItems: Rufe Daten für Benutzer ab", user.id);
 
         // Abfrage, um die häufigsten Items aus den Einkaufssessions des Benutzers zu erhalten
         const { data, error } = await supabase.rpc("get_user_popular_items", {
@@ -26,19 +23,11 @@ export function useUserPopularItems(limit: number = 20) {
         });
 
         if (error) {
-          console.error("Error fetching user popular items:", error);
           throw error;
         }
 
-        console.log("useUserPopularItems: Erhaltene Daten:", data);
-        console.log(
-          "useUserPopularItems: Anzahl der Items:",
-          data?.length || 0
-        );
-
         return data || [];
       } catch (err) {
-        console.error("Error in useUserPopularItems:", err);
         throw err;
       }
     },
@@ -55,12 +44,8 @@ export function useItems(searchText?: string) {
     queryKey: ["items", searchText],
     queryFn: async () => {
       try {
-        console.log("useItems: Suchtext:", searchText);
-
         // Wenn es einen Suchtext gibt, suchen wir in der Datenbank
         if (searchText?.trim()) {
-          console.log("useItems: Suche nach Items mit Suchtext");
-
           const { data, error } = await supabase
             .from("items")
             .select("*")
@@ -69,28 +54,17 @@ export function useItems(searchText?: string) {
 
           if (error) throw error;
 
-          console.log(
-            "useItems: Gefundene Items mit Suchtext:",
-            data?.length || 0
-          );
           return data || [];
         }
 
         // Wenn der Benutzer bereits Einkäufe getätigt hat, zeigen wir seine häufigsten Items
-        console.log(
-          "useItems: Benutzer-Items verfügbar:",
-          userPopularItems.length > 0
-        );
         if (userPopularItems.length > 0) {
-          console.log("useItems: Verwende Benutzer-Items:", userPopularItems);
           return userPopularItems;
         }
 
         // Wenn keine Benutzer-Items vorhanden sind, geben wir eine leere Liste zurück
-        console.log("useItems: Keine Benutzer-Items vorhanden, leere Liste");
         return [];
       } catch (err) {
-        console.error("Error in useItems:", err);
         throw err;
       }
     },
@@ -112,8 +86,6 @@ export function useAddItemToList() {
 
   return useMutation({
     mutationFn: async (data: AddItemToListData) => {
-      console.log("Adding item to list with data:", data);
-
       // If categoryId is provided, update the item's category
       if (data.categoryId) {
         const { error: updateError } = await supabase
@@ -122,7 +94,6 @@ export function useAddItemToList() {
           .eq("id", data.itemId);
 
         if (updateError) {
-          console.error("Error updating item category:", updateError);
           throw updateError;
         }
       }
@@ -139,19 +110,12 @@ export function useAddItemToList() {
       ]);
 
       if (error) {
-        console.error("Error in useAddItemToList:", error);
         throw error;
       }
-
-      console.log("Successfully added item to list");
     },
     onSuccess: (_, variables) => {
-      console.log("Invalidating queries for list:", variables.listId);
       queryClient.invalidateQueries({ queryKey: ["list", variables.listId] });
       queryClient.invalidateQueries({ queryKey: ["items"] });
-    },
-    onError: (error) => {
-      console.error("Mutation error in useAddItemToList:", error);
     },
   });
 }
@@ -202,7 +166,6 @@ export function useCreateCustomItem() {
         .single();
 
       if (error) {
-        console.error("Error in useCreateCustomItem:", error);
         throw error;
       }
 
@@ -211,8 +174,176 @@ export function useCreateCustomItem() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["items"] });
     },
-    onError: (error) => {
-      console.error("Mutation error in useCreateCustomItem:", error);
-    },
   });
 }
+
+export const useCheckedItems = (listId: string, options?: UseMutationOptions<any, Error, number[]>) => {
+  const queryClient = useQueryClient();
+  
+  return useMutation<any, Error, number[]>({
+    mutationFn: async (itemIds: number[]) => {
+      if (!itemIds.length) return;
+      
+      const { data, error } = await supabase
+        .from("list_items")
+        .update({ is_checked: true })
+        .in("id", itemIds);
+      
+      if (error) {
+        throw error;
+      }
+      
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["list", listId] });
+      queryClient.invalidateQueries({ queryKey: ["lists"] });
+    },
+    ...options,
+  });
+};
+
+export const useAddItem = (listId: string) => {
+  const queryClient = useQueryClient();
+
+  interface AddItemData {
+    itemId: string;
+    quantity: number;
+    unit?: string;
+    notes?: string;
+  }
+
+  return useMutation({
+    mutationFn: async (data: AddItemData) => {
+      const { data: newItem, error } = await supabase.from("list_items").insert([
+        {
+          list_id: listId,
+          item_id: data.itemId,
+          quantity: data.quantity,
+          unit: data.unit || "Stück",
+          notes: data.notes,
+          is_checked: false,
+        },
+      ])
+      .select()
+      .single();
+      
+      if (error) {
+        throw new Error(`Fehler beim Hinzufügen des Items: ${error.message}`);
+      }
+      
+      return newItem;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["list", listId] });
+      queryClient.invalidateQueries({ queryKey: ["lists"] });
+    }
+  });
+};
+
+export const useUpdateItem = (listId: string) => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: { id: number, name?: string, quantity?: number, checked?: boolean, categoryId?: number, unit?: string }) => {
+      const { data: updatedItem, error: updateError } = await supabase
+        .from("list_items")
+        .update({
+          name: data.name,
+          quantity: data.quantity,
+          is_checked: data.checked,
+          category_id: data.categoryId,
+          unit: data.unit,
+        })
+        .eq("id", data.id)
+        .select()
+        .single();
+      
+      if (updateError) {
+        throw new Error(`Fehler beim Aktualisieren des Items: ${updateError.message}`);
+      }
+      
+      return updatedItem;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["list", listId] });
+      queryClient.invalidateQueries({ queryKey: ["lists"] });
+    },
+  });
+};
+
+export const useDeleteItem = (listId: string) => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (itemId: number) => {
+      const { data, error } = await supabase
+        .from("list_items")
+        .delete()
+        .eq("id", itemId);
+      
+      if (error) {
+        throw new Error(`Fehler beim Löschen des Items: ${error.message}`);
+      }
+      
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["list", listId] });
+      queryClient.invalidateQueries({ queryKey: ["lists"] });
+    },
+  });
+};
+
+export const useMoveItems = (sourceListId: string) => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ targetListId, itemIds }: { targetListId: string, itemIds: number[] }) => {
+      const { data, error: updateError } = await supabase
+        .from("list_items")
+        .update({ list_id: targetListId })
+        .in("id", itemIds);
+      
+      if (updateError) {
+        throw new Error(`Fehler beim Verschieben der Items: ${updateError.message}`);
+      }
+      
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["list"] });
+      queryClient.invalidateQueries({ queryKey: ["lists"] });
+    },
+  });
+};
+
+export const useCopyItems = (sourceListId: string) => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ targetListId, itemIds }: { targetListId: string, itemIds: number[] }) => {
+      const { data, error } = await supabase
+        .from("list_items")
+        .insert(
+          itemIds.map((itemId) => ({
+            list_id: targetListId,
+            item_id: itemId,
+            quantity: 1,
+            unit: "Stück",
+            is_checked: false,
+          }))
+        );
+      
+      if (error) {
+        throw new Error(`Fehler beim Kopieren der Items: ${error.message}`);
+      }
+      
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["list"] });
+      queryClient.invalidateQueries({ queryKey: ["lists"] });
+    },
+  });
+};

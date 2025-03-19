@@ -1,25 +1,32 @@
+import React from "react";
 import { View, Alert } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Text } from "@/components/ui/Text";
 import { ListItem } from "@/components/lists/ListItem";
-import { useList, useDeleteList } from "@/hooks/useLists";
+import { useList, useDeleteList, useListWithRealtime } from "@/hooks";
 import { TouchableOpacity, ScrollView } from "react-native-gesture-handler";
 import { Ionicons } from "@expo/vector-icons";
 import { ShoppingList, ListItem as ListItemType } from "@/types/database.types";
 import { Image } from "react-native";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
-import { useCreateShoppingSession } from "@/hooks/useShoppingSessions";
+import { useCreateShoppingSession } from "@/hooks";
 import LottieView from "lottie-react-native";
 import { useRef, useState, useEffect } from "react";
-import { useCategories, useInitializeCategories } from "@/hooks/useCategories";
+import { useCategories, useInitializeCategories } from "@/hooks";
 import { CategoryIcon } from "@/components/ui/CategoryIcon";
+import { ShareListButton } from "@/components/ShareListButton";
 
 export default function ListScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { data: list, isLoading } = useList(id) as {
+  const {
+    data: list,
+    isLoading,
+    isSubscribed,
+  } = useListWithRealtime(id) as {
     data: ShoppingList | undefined;
     isLoading: boolean;
+    isSubscribed: boolean;
   };
   const deleteList = useDeleteList();
   const createShoppingSession = useCreateShoppingSession();
@@ -30,13 +37,12 @@ export default function ListScreen() {
 
   // Initialize categories if they don't exist
   useEffect(() => {
-    console.log("Initializing categories...");
     initializeCategories.mutate(undefined, {
       onSuccess: () => {
-        console.log("Categories initialized successfully");
+        // Categories initialized successfully
       },
-      onError: (error) => {
-        console.error("Error initializing categories:", error);
+      onError: () => {
+        // Error initializing categories
       },
     });
   }, []);
@@ -175,19 +181,25 @@ export default function ListScreen() {
               />
             )}
           </View>
-          <TouchableOpacity
-            onPress={handleDeleteList}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Ionicons name="ellipsis-vertical" size={24} color="white" />
-          </TouchableOpacity>
+          <View className="flex-row items-center">
+            {isSubscribed && (
+              <View className="mr-2 bg-green-800/30 px-2 py-1 rounded-full">
+                <Text className="text-green-500 text-xs">Live</Text>
+              </View>
+            )}
+            <ShareListButton listId={id} />
+            <TouchableOpacity
+              onPress={handleDeleteList}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="ellipsis-vertical" size={24} color="white" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Progress */}
-        <View className="bg-black-2 p-4 mx-4 rounded-xl mb-4">
-          <Text variant="medium" className="mb-2">
-            Fortschritt
-          </Text>
+        <View className="bg-black-2 p-4 mx-4 rounded-xl mb-4 flex-row items-center justify-between">
+          <Text variant="medium">Fortschritt</Text>
           <Text variant="light" className="text-black-3 font-rubik-semibold">
             {checkedItems.length} von {list.items?.length || 0} Items erledigt
           </Text>

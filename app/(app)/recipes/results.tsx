@@ -39,23 +39,13 @@ export default function RecipeResultsScreen() {
 
   useEffect(() => {
     if (imageUri) {
-      console.log("[DEBUG-Results] Starte OCR-Prozess mit Bild:", imageUri);
       extractTextFromImage(imageUri)
         .then((extractedText) => {
-          console.log(
-            "[DEBUG-Results] OCR-Extraktion abgeschlossen, Text gefunden:",
-            !!extractedText,
-            "Länge:",
-            extractedText?.length || 0
-          );
           if (extractedText) {
             setError(null);
             setLoading(false);
             const ingredients = extractIngredientsFromText(extractedText);
-            console.log(
-              "[DEBUG-Results] Zutaten extrahiert:",
-              ingredients.length
-            );
+
             const ingredientsWithSelection = ingredients.map((ingredient) => ({
               ...ingredient,
               selected: false,
@@ -76,7 +66,6 @@ export default function RecipeResultsScreen() {
           setLoading(false);
         })
         .finally(() => {
-          console.log("[DEBUG-Results] OCR-Prozess abgeschlossen");
           setLoading(false);
         });
     }
@@ -99,9 +88,7 @@ export default function RecipeResultsScreen() {
   };
 
   const openListSelector = () => {
-    console.log("[DEBUG] Öffne Listen-Auswahl Bottom Sheet");
     if (bottomSheetModalRef.current) {
-      console.log("[DEBUG] BottomSheet Ref existiert, rufe present() auf");
       // Mit animate:true Option aufrufen, um Probleme mit "Reduced Motion" zu umgehen
       bottomSheetModalRef.current.present({ animate: true });
     } else {
@@ -127,10 +114,8 @@ export default function RecipeResultsScreen() {
     }
 
     setIsAddingToList(true);
-    console.log("[DEBUG] Ausgewählte Liste ID:", selectedListId);
 
     try {
-      console.log("[DEBUG] Beginne mit dem Hinzufügen der Zutaten");
       const addPromises = selectedIngredients.map(async (ingredient, index) => {
         try {
           console.log(

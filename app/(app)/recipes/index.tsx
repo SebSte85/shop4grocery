@@ -16,9 +16,6 @@ export default function RecipesScreen() {
   // Reset isLoading when screen is focused (when returning from another screen)
   useFocusEffect(
     React.useCallback(() => {
-      console.log(
-        "[DEBUG] RecipesScreen is focused, resetting isLoading state"
-      );
       setIsLoading(false);
       return () => {
         // Cleanup function when screen is unfocused
@@ -34,18 +31,14 @@ export default function RecipesScreen() {
       // Zielverzeichnis - wir verwenden den Dokumentenordner der App
       const destinationUri = `${FileSystem.documentDirectory}${fileName}`;
 
-      console.log(`Kopiere Bild von ${uri} nach ${destinationUri}`);
-
       // Kopieren der Datei
       await FileSystem.copyAsync({
         from: uri,
         to: destinationUri,
       });
 
-      console.log(`Bild erfolgreich kopiert, neuer Pfad: ${destinationUri}`);
       return destinationUri;
     } catch (error) {
-      console.error("Fehler beim Kopieren des Bildes:", error);
       // Wenn das Kopieren fehlschlägt, geben wir die Original-URI zurück
       return uri;
     }
@@ -73,7 +66,6 @@ export default function RecipesScreen() {
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const selectedImageUri = result.assets[0].uri;
-        console.log("Ausgewähltes Bild:", selectedImageUri);
 
         // Kopiere das Bild zu einem sicheren Ort
         const safeImageUri = await copyImageToSafeLocation(selectedImageUri);
@@ -111,7 +103,6 @@ export default function RecipesScreen() {
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const capturedImageUri = result.assets[0].uri;
-        console.log("Aufgenommenes Foto:", capturedImageUri);
 
         // Kopiere das Bild zu einem sicheren Ort
         const safeImageUri = await copyImageToSafeLocation(capturedImageUri);
