@@ -5,8 +5,18 @@ import Stripe from 'https://esm.sh/stripe@12.0.0?target=deno';
 // Umgebungsvariablen laden
 const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
 const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
-const stripeSecretKey = Deno.env.get('STRIPE_SECRET_KEY') || '';
+
+// Stripe Secret Key auswählen (TEST oder LIVE)
+const isProduction = Deno.env.get('IS_PRODUCTION') === 'true';
+const stripeSecretKey = isProduction 
+  ? Deno.env.get('STRIPE_SECRET_KEY_LIVE') || '' 
+  : Deno.env.get('STRIPE_SECRET_KEY_TEST') || '';
+
+console.log(`Using ${isProduction ? 'LIVE' : 'TEST'} Stripe mode, key is set: ${!!stripeSecretKey}`);
+
 const appUrl = Deno.env.get('APP_URL') || 'korbklick://'; // Deine App-URL für Weiterleitungen
+console.log(`Using app URL: ${appUrl}`);
+console.log(`ENV var APP_URL is: '${Deno.env.get('APP_URL')}'`);
 
 // Stripe und Supabase initialisieren
 const stripe = new Stripe(stripeSecretKey, {
@@ -102,30 +112,50 @@ serve(async (req) => {
     }
 
     // Erstellen der Checkout-Session
-    const session = await stripe.checkout.sessions.create({
-      customer: customerId,
-      line_items: [
-        {
-          price: priceId,
-          quantity: 1,
-        },
-      ],
-      mode: 'subscription',
-      success_url: `${appUrl}subscription?success=true&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${appUrl}subscription?canceled=true`,
-      metadata: {
-        userId: userId
-      },
-    });
+    console.log(`Creating checkout session for customer: ${customerId}, priceId: ${priceId}`);
 
-    // Erfolgreiche Antwort mit der Session-ID
-    return new Response(JSON.stringify({ 
-      sessionId: session.id, 
-      url: session.url
-    }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    // Für Stripe müssen wir eine gültige Web-URL verwenden (kein Deep-Link-Schema)
+    // Diese URLs werden später zu deiner App umgeleitet
+    const baseWebhookUrl = `${supabaseUrl}/functions/v1/stripe-redirect`;
+    const successUrl = `${baseWebhookUrl}?redirect=korbklick://subscription&success=true&session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl = `${baseWebhookUrl}?redirect=korbklick://subscription&canceled=true`;
+
+    console.log(`Success URL will be: ${successUrl}`);
+    console.log(`Cancel URL will be: ${cancelUrl}`);
+
+    try {
+      const session = await stripe.checkout.sessions.create({
+        customer: customerId,
+        line_items: [
+          {
+            price: priceId,
+            quantity: 1,
+          },
+        ],
+        mode: 'subscription',
+        success_url: successUrl,
+        cancel_url: cancelUrl,
+        metadata: {
+          userId: userId
+        },
+      });
+
+      // Erfolgreiche Antwort mit der Session-ID
+      console.log(`Session created successfully: ${session.id}`);
+      console.log(`Checkout URL: ${session.url}`);
+      
+      return new Response(JSON.stringify({ 
+        sessionId: session.id, 
+        url: session.url
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (err) {
+      console.error(`Error creating checkout session: ${err.message}`);
+      console.error(`Error details:`, JSON.stringify(err, null, 2));
+      throw err;
+    }
 
   } catch (error) {
     // Fehlerbehandlung

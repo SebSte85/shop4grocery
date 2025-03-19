@@ -16,11 +16,7 @@ import { useInitStripe } from "@/hooks/useInitStripe";
 import * as WebBrowser from "expo-web-browser";
 import { useRouter, useLocalSearchParams } from "expo-router";
 
-type PlanInterval = "monthly" | "yearly";
-
 export default function SubscriptionPlans() {
-  const [selectedInterval, setSelectedInterval] =
-    React.useState<PlanInterval>("monthly");
   const { isSubscribed, subscription, plan, subscribe, isSubscribing } =
     useSubscription();
   const { isLoading: isStripeLoading } = useInitStripe();
@@ -44,18 +40,36 @@ export default function SubscriptionPlans() {
     }
   }, [params]);
 
-  const handleSubscribe = async (interval: PlanInterval) => {
+  const handleSubscribe = async () => {
     try {
-      const priceId =
-        interval === "monthly"
-          ? SUBSCRIPTION_PRICES.MONTHLY
-          : SUBSCRIPTION_PRICES.YEARLY;
+      const priceId = SUBSCRIPTION_PRICES.YEARLY;
+      console.log(`Subscribing with priceId: ${priceId}`);
 
       const sessionData = await subscribe(priceId);
+      console.log(`Session data received:`, JSON.stringify(sessionData));
 
       if (sessionData?.url) {
-        // URL im Browser öffnen
-        await WebBrowser.openBrowserAsync(sessionData.url);
+        console.log(`Opening browser with URL: ${sessionData.url}`);
+        try {
+          // URL im Browser öffnen
+          const result = await WebBrowser.openBrowserAsync(sessionData.url);
+          console.log(`Browser result:`, JSON.stringify(result));
+        } catch (browserError: any) {
+          console.error(`Error opening browser:`, browserError);
+          Alert.alert(
+            "Browser-Fehler",
+            "Die Zahlungsseite konnte nicht geöffnet werden. Fehler: " +
+              browserError.message,
+            [{ text: "OK" }]
+          );
+        }
+      } else {
+        console.error(`No URL received in session data`);
+        Alert.alert(
+          "Fehler",
+          "Keine gültige Zahlungs-URL erhalten. Bitte versuche es später erneut.",
+          [{ text: "OK" }]
+        );
       }
     } catch (error) {
       console.error("Fehler beim Abonnieren:", error);
@@ -85,7 +99,7 @@ export default function SubscriptionPlans() {
           Premium-Funktionen freischalten
         </Text>
         <Text className="text-gray-400 font-rubik text-center mb-6">
-          Wähle den Plan, der am besten zu dir passt
+          Mit Premium erhältst du Zugriff auf alle Funktionen
         </Text>
 
         {isSubscribed && (
@@ -103,39 +117,6 @@ export default function SubscriptionPlans() {
           </View>
         )}
 
-        {/* Plan Toggle */}
-        <View className="flex-row justify-center bg-black-2 rounded-full p-1 mb-6">
-          <TouchableOpacity
-            className={`py-2 px-6 rounded-full ${
-              selectedInterval === "monthly" ? "bg-primary-1" : ""
-            }`}
-            onPress={() => setSelectedInterval("monthly")}
-          >
-            <Text
-              className={`font-rubik ${
-                selectedInterval === "monthly" ? "text-white" : "text-gray-400"
-              }`}
-            >
-              Monatlich
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            className={`py-2 px-6 rounded-full ${
-              selectedInterval === "yearly" ? "bg-primary-1" : ""
-            }`}
-            onPress={() => setSelectedInterval("yearly")}
-          >
-            <Text
-              className={`font-rubik ${
-                selectedInterval === "yearly" ? "text-white" : "text-gray-400"
-              }`}
-            >
-              Jährlich
-              <Text className="text-green-400 font-rubik-bold"> -16%</Text>
-            </Text>
-          </TouchableOpacity>
-        </View>
-
         {/* Free Plan */}
         <View className="bg-black-2 rounded-lg p-4 mb-4">
           <Text className="text-white font-rubik-bold text-xl">Kostenlos</Text>
@@ -152,7 +133,7 @@ export default function SubscriptionPlans() {
             <FeatureItem text="Kein Werbung" included={false} />
           </View>
           <Text className="text-gray-400 font-rubik mt-4 text-center">
-            Dein aktueller Plan
+            {plan === "free" ? "Dein aktueller Plan" : ""}
           </Text>
         </View>
 
@@ -165,11 +146,8 @@ export default function SubscriptionPlans() {
           </View>
           <Text className="text-white font-rubik-bold text-xl">Premium</Text>
           <Text className="text-primary-1 font-rubik-bold text-2xl mt-2">
-            {selectedInterval === "monthly" ? "€4.99" : "€49.99"}
-            <Text className="text-gray-400 font-rubik text-sm">
-              {" "}
-              / {selectedInterval === "monthly" ? "Monat" : "Jahr"}
-            </Text>
+            €4.99
+            <Text className="text-gray-400 font-rubik text-sm"> / Jahr</Text>
           </Text>
           <Text className="text-gray-300 font-rubik mt-4">Enthält:</Text>
           <View className="mt-2 space-y-2">
@@ -185,7 +163,7 @@ export default function SubscriptionPlans() {
             className={`bg-primary-1 py-4 rounded-lg mt-6 ${
               isSubscribing ? "opacity-70" : ""
             }`}
-            onPress={() => handleSubscribe(selectedInterval)}
+            onPress={handleSubscribe}
             disabled={isSubscribing || isSubscribed}
           >
             <Text className="text-white font-rubik-bold text-center">

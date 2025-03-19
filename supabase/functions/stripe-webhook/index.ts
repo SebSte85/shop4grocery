@@ -5,8 +5,19 @@ import Stripe from 'https://esm.sh/stripe@12.0.0?target=deno';
 // Umgebungsvariablen laden
 const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
 const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
-const stripeSecretKey = Deno.env.get('STRIPE_SECRET_KEY') || '';
-const stripeWebhookSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET') || '';
+
+// Stripe Secret Key auswählen (TEST oder LIVE)
+const isProduction = Deno.env.get('IS_PRODUCTION') === 'true';
+const stripeSecretKey = isProduction 
+  ? Deno.env.get('STRIPE_SECRET_KEY_LIVE') || '' 
+  : Deno.env.get('STRIPE_SECRET_KEY_TEST') || '';
+
+console.log(`Using ${isProduction ? 'LIVE' : 'TEST'} Stripe mode, key is set: ${!!stripeSecretKey}`);
+
+const stripeWebhookSecret = isProduction
+  ? Deno.env.get('STRIPE_WEBHOOK_SECRET_PROD') || ''
+  : Deno.env.get('STRIPE_WEBHOOK_SECRET_TEST') || '';
+console.log(`Webhook secret is set: ${!!stripeWebhookSecret} (${isProduction ? 'PRODUCTION' : 'TEST'} mode)`);
 
 // Stripe und Supabase initialisieren
 const stripe = new Stripe(stripeSecretKey, {
@@ -167,17 +178,15 @@ async function handleSubscriptionDeleted(subscription) {
 async function updateSubscriptionInDatabase(subscription, userId, customerId) {
   // Plan-Typ basierend auf dem Produkt bestimmen
   // Hier müssten Sie Ihre eigene Logik implementieren, um den Plan zu bestimmen
-  // Dies ist ein Beispiel, das davon ausgeht, dass Sie ein bestimmtes Produkt mit einer bestimmten Preis-ID haben
   let plan = 'free';
   
   // Prüfen, ob es sich um ein aktives Premium-Abonnement handelt
   if (subscription.status === 'active' || subscription.status === 'trialing') {
     // Hier könnten Sie die Produkt-ID überprüfen
-    // Dies ist nur ein Beispiel - ersetzen Sie es durch Ihre eigene Logik
     const priceId = subscription.items.data[0]?.price.id;
     
-    // Beispiel: Wenn es einer Ihrer Premium-Preise ist
-    if (priceId === 'price_monthly_id' || priceId === 'price_yearly_id') {
+    // Beide Price-IDs unterstützen - sowohl TEST als auch PRODUCTION
+    if (priceId === 'price_1R4U7DE8Z1k49fUhsVJvFBCb' || priceId === 'price_1R4UgYE8Z1k49fUhDHSgXGlL') {
       plan = 'premium';
     }
   }

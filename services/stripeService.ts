@@ -8,10 +8,14 @@ const PUBLISHABLE_KEY =
     ? process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY_LIVE
     : process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY_TEST;
 
-// Price IDs for your subscription plans in Stripe - replace with your actual Stripe price IDs
+// Unterscheide zwischen Test- und Produktions-Price-IDs
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+
+// Price IDs for your subscription plans in Stripe
 export const SUBSCRIPTION_PRICES = {
-  MONTHLY: 'price_monthly_id', // Replace with your actual Stripe price ID
-  YEARLY: 'price_yearly_id',   // Replace with your actual Stripe price ID
+  YEARLY: IS_PRODUCTION 
+    ? 'price_1R4U7DE8Z1k49fUhsVJvFBCb'   // Jährliches Abo (4,99€) - PRODUCTION
+    : 'price_1R4UgYE8Z1k49fUhDHSgXGlL',  // Jährliches Abo (4,99€) - TEST
 };
 
 // Die URL Deiner Supabase-Instanz
@@ -36,12 +40,14 @@ export const initializeStripe = async () => {
 // Create a checkout session for subscription using Supabase Function
 export const createCheckoutSession = async (priceId: string, userId: string) => {
   try {
+    console.log(`Creating checkout session for price: ${priceId} and user: ${userId}`);
     const { data: authData } = await supabase.auth.getSession();
     
     if (!authData.session) {
       throw new Error('Not authenticated');
     }
 
+    console.log(`Calling Supabase function at: ${SUPABASE_URL}/functions/v1/create-checkout`);
     // Call the Supabase Function to create a checkout session
     const response = await fetch(`${SUPABASE_URL}/functions/v1/create-checkout`, {
       method: 'POST',
@@ -54,13 +60,19 @@ export const createCheckoutSession = async (priceId: string, userId: string) => 
 
     if (!response.ok) {
       const errorData = await response.json();
+      console.error('Checkout session creation failed:', errorData);
       throw new Error(errorData.error || 'Failed to create checkout session');
     }
 
     const sessionData = await response.json();
+    console.log('Checkout session created successfully:', {
+      sessionId: sessionData.sessionId,
+      hasUrl: !!sessionData.url
+    });
 
     // Check if we're on a native platform to open browser for payment
     if (Platform.OS !== 'web' && sessionData.url) {
+      console.log(`Native platform detected: ${Platform.OS}, URL available`);
       // We'll implement opening the URL in our component using Linking or WebBrowser
       return sessionData;
     }
