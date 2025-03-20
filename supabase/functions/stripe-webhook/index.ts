@@ -55,12 +55,27 @@ serve(async (req) => {
     const body = await req.text();
     console.log(`Received webhook payload with length: ${body.length}`);
 
-    // Event parsen - ohne Signaturprüfung im Testmodus
+    // Stripe-Signatur extrahieren, wenn vorhanden
+    const signature = req.headers.get('stripe-signature');
+    console.log(`Stripe signature present: ${!!signature}`);
+
+    // Event parsen - im Produktionsmodus mit Signaturprüfung, sonst direkt
     let event;
     try {
-      // In der Produktionsumgebung würden wir die Signatur prüfen
-      // Aber da wir das SubtleCryptoProvider-Problem haben, parsen wir das Event direkt
-      event = JSON.parse(body);
+      if (signature && stripeWebhookSecret) {
+        // Mit Signaturprüfung (sicherer, für Produktion)
+        console.log('Verifying webhook signature...');
+        event = await stripe.webhooks.constructEventAsync(
+          body,
+          signature,
+          stripeWebhookSecret
+        );
+        console.log('Signature verified successfully');
+      } else {
+        // Ohne Signaturprüfung (nur für Entwicklungszwecke)
+        console.log('No signature verification - parsing event directly');
+        event = JSON.parse(body);
+      }
       console.log(`Successfully parsed webhook event. Event type: ${event.type}`);
     } catch (err: any) {
       console.error(`Webhook parsing failed:`, err);
@@ -74,20 +89,23 @@ serve(async (req) => {
     console.log(`Processing event of type: ${event.type}`);
     
     switch (event.type) {
-      case 'payment_intent.succeeded': {
-        console.log('Processing payment_intent.succeeded event');
-        const paymentIntent = event.data.object;
+      case 'invoice.payment_succeeded': {
+        // Dieser Event wird ausgelöst, wenn eine Rechnung bezahlt wurde
+        // Für Abonnements bedeutet das, dass das Abo jetzt aktiv ist
+        console.log('Processing invoice.payment_succeeded event');
+        const invoice = event.data.object;
         
-        // Prüfen ob es sich um ein Abonnement handelt
-        if (paymentIntent.metadata?.isSubscription === 'true') {
-          await handleSuccessfulSubscriptionPayment(paymentIntent);
+        // Prüfen, ob die Rechnung zu einem Abonnement gehört
+        if (invoice.subscription) {
+          await handleSuccessfulSubscriptionPayment(invoice);
         }
         break;
       }
-      case 'checkout.session.completed': {
-        console.log('Processing checkout.session.completed event');
-        const session = event.data.object;
-        await handleCheckoutSessionCompleted(session);
+      case 'payment_intent.succeeded': {
+        console.log('Processing payment_intent.succeeded event');
+        const paymentIntent = event.data.object;
+        // Keine Aktion notwendig, da die invoice.payment_succeeded 
+        // den Abonnementstatus aktualisieren wird
         break;
       }
       case 'customer.subscription.created':
@@ -125,80 +143,124 @@ serve(async (req) => {
   }
 });
 
-// Handler für erfolgreiche Zahlungen via PaymentSheet
-async function handleSuccessfulSubscriptionPayment(paymentIntent: any) {
-  // Metadaten extrahieren
-  const { userId, priceId, plan, interval } = paymentIntent.metadata;
-  const customerId = paymentIntent.customer;
+// Handler für erfolgreiche Zahlungen von Rechnungen
+async function handleSuccessfulSubscriptionPayment(invoice: any) {
+  // Abonnement-ID aus der Rechnung extrahieren
+  const subscriptionId = invoice.subscription;
+  const customerId = invoice.customer;
   
-  if (!userId || !customerId) {
-    console.error('Keine userId oder customerId im PaymentIntent gefunden', paymentIntent.id);
+  if (!subscriptionId || !customerId) {
+    console.error('Keine subscription_id oder customer_id in der Invoice gefunden', invoice.id);
     return;
   }
-  
-  console.log(`Creating subscription for user ${userId} with price ${priceId}`);
   
   try {
-    // Abonnement in Stripe erstellen
-    const subscription = await stripe.subscriptions.create({
-      customer: customerId,
-      items: [{ price: priceId }],
-      metadata: { userId }
-    });
+    // Abonnementdetails abrufen
+    console.log(`Retrieving subscription details for ${subscriptionId}`);
+    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+    console.log(`Full subscription object:`, JSON.stringify(subscription));
     
-    // Abonnementdetails in der Datenbank speichern
+    // Versuch 1: Benutzer anhand der Stripe-Kunden-ID in der Datenbank finden
+    let userId = null;
+    const { data: userData, error } = await supabase
+      .from('user_subscriptions')
+      .select('user_id')
+      .eq('stripe_customer_id', customerId)
+      .single();
+    
+    if (error || !userData) {
+      console.log('Benutzer nicht in user_subscriptions gefunden, versuche Metadaten...');
+      
+      // Versuch 2: Prüfe subscription.metadata nach userId
+      if (subscription.metadata && subscription.metadata.userId) {
+        userId = subscription.metadata.userId;
+        console.log(`Extracted userId from subscription metadata: ${userId}`);
+      } 
+      // Versuch 3: Prüfe customer.metadata nach supabaseUserId
+      else {
+        console.log(`Looking up customer metadata for ${customerId}`);
+        const customer = await stripe.customers.retrieve(customerId);
+        console.log(`Customer metadata:`, JSON.stringify(customer.metadata));
+        
+        if (customer.metadata && customer.metadata.supabaseUserId) {
+          userId = customer.metadata.supabaseUserId;
+          console.log(`Extracted userId from customer metadata: ${userId}`);
+        } else {
+          console.error('Keine user_id in den Metadaten gefunden');
+          return;
+        }
+      }
+    } else {
+      userId = userData.user_id;
+      console.log(`Found userId in database: ${userId}`);
+    }
+    
+    if (!userId) {
+      console.error('Konnte keine user_id finden');
+      return;
+    }
+    
+    // Abonnementdetails in der Datenbank aktualisieren
     await updateSubscriptionInDatabase(subscription, userId, customerId);
-    
-    console.log(`Subscription created successfully: ${subscription.id}`);
+    console.log(`Subscription ${subscriptionId} updated to status: ${subscription.status}`);
   } catch (err) {
-    console.error('Error creating subscription:', err);
+    console.error('Error processing subscription payment:', err);
   }
-}
-
-// Handler für abgeschlossene Checkout-Sessions
-async function handleCheckoutSessionCompleted(session: any) {
-  // Benutzer-ID aus den Metadaten extrahieren
-  const userId = session.metadata.userId;
-  const customerId = session.customer;
-  
-  if (!userId || !customerId) {
-    console.error('Keine userId oder customerId in der Session gefunden');
-    return;
-  }
-  
-  // Abrufen des Abonnements
-  const subscriptionId = session.subscription;
-  if (!subscriptionId) {
-    console.error('Kein Abonnement in der Session gefunden');
-    return;
-  }
-  
-  // Details des Abonnements abrufen
-  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-  
-  // Abonnementdetails in der Datenbank speichern
-  await updateSubscriptionInDatabase(subscription, userId, customerId);
 }
 
 // Handler für Abonnement-Updates
 async function handleSubscriptionUpdated(subscription: any) {
-  // Kunde-ID aus dem Abonnement extrahieren
-  const customerId = subscription.customer;
+  console.log(`Processing subscription update for ${subscription.id}`);
   
-  // Benutzer anhand der Stripe-Kunden-ID in der Datenbank finden
-  const { data: userData, error } = await supabase
-    .from('user_subscriptions')
-    .select('user_id')
-    .eq('stripe_customer_id', customerId)
-    .single();
-  
-  if (error || !userData) {
-    console.error('Benutzer nicht gefunden', error);
-    return;
+  try {
+    // Kunde-ID aus dem Abonnement extrahieren
+    const customerId = subscription.customer;
+    let userId = null;
+    
+    // Versuch 1: Benutzer anhand der Stripe-Kunden-ID in der Datenbank finden
+    const { data: userData, error } = await supabase
+      .from('user_subscriptions')
+      .select('user_id')
+      .eq('stripe_customer_id', customerId)
+      .single();
+    
+    if (error || !userData) {
+      console.log('Benutzer nicht in user_subscriptions gefunden, versuche Metadaten...');
+      
+      // Versuch 2: Prüfe subscription.metadata nach userId
+      if (subscription.metadata && subscription.metadata.userId) {
+        userId = subscription.metadata.userId;
+        console.log(`Extracted userId from subscription metadata: ${userId}`);
+      } 
+      // Versuch 3: Prüfe customer.metadata nach supabaseUserId
+      else {
+        console.log(`Looking up customer metadata for ${customerId}`);
+        const customer = await stripe.customers.retrieve(customerId);
+        
+        if (customer.metadata && customer.metadata.supabaseUserId) {
+          userId = customer.metadata.supabaseUserId;
+          console.log(`Extracted userId from customer metadata: ${userId}`);
+        } else {
+          console.error('Keine user_id in den Metadaten gefunden');
+          return;
+        }
+      }
+    } else {
+      userId = userData.user_id;
+      console.log(`Found userId in database: ${userId}`);
+    }
+    
+    if (!userId) {
+      console.error('Konnte keine user_id finden');
+      return;
+    }
+    
+    // Abonnementdetails in der Datenbank aktualisieren
+    await updateSubscriptionInDatabase(subscription, userId, customerId);
+    console.log(`Subscription ${subscription.id} updated after event`);
+  } catch (err) {
+    console.error('Error handling subscription update:', err);
   }
-  
-  // Abonnementdetails in der Datenbank aktualisieren
-  await updateSubscriptionInDatabase(subscription, userData.user_id, customerId);
 }
 
 // Handler für gelöschte Abonnements
@@ -234,27 +296,82 @@ async function handleSubscriptionDeleted(subscription: any) {
 
 // Hilfsfunktion zum Aktualisieren des Abonnements in der Datenbank
 async function updateSubscriptionInDatabase(subscription: any, userId: string, customerId: string) {
+  // Ausführliche Protokollierung hinzufügen
+  console.log(`Updating subscription in database: ${subscription.id} for user ${userId}`);
+  console.log(`Subscription status: ${subscription.status}`);
+  
+  // Produkt-ID aus dem Abonnement extrahieren
+  const priceId = subscription.items.data[0]?.price.id;
+  const productId = subscription.items.data[0]?.price.product;
+  console.log(`Price ID: ${priceId}, Product ID: ${productId}`);
+  
   // Plan-Typ basierend auf dem Produkt bestimmen
-  // Hier müssten Sie Ihre eigene Logik implementieren, um den Plan zu bestimmen
   let plan = 'free';
   
   // Prüfen, ob es sich um ein aktives Premium-Abonnement handelt
   if (subscription.status === 'active' || subscription.status === 'trialing') {
     // Hier könnten Sie die Produkt-ID überprüfen
-    const priceId = subscription.items.data[0]?.price.id;
+    console.log(`Price ID found: ${priceId}`);
     
     // Beide Price-IDs unterstützen - sowohl TEST als auch PRODUCTION
     if (priceId === 'price_1R4U7DE8Z1k49fUhsVJvFBCb' || priceId === 'price_1R4UgYE8Z1k49fUhDHSgXGlL') {
       plan = 'premium';
+      console.log(`Setting plan to premium based on price ID: ${priceId}`);
     }
   }
+
+  // Abonnementstatus für UI-Anzeige interpretieren
+  let displayStatus = subscription.status;
+  let accessGranted = false;
+
+  // Interpretieren des Status für die App-Features
+  switch (subscription.status) {
+    case 'active':
+    case 'trialing':
+      displayStatus = 'active';
+      accessGranted = true;
+      break;
+    case 'past_due':
+      displayStatus = 'past_due';
+      // Bei past_due noch Zugriff gewähren, aber mit Warnung
+      accessGranted = true;
+      break;
+    case 'incomplete':
+      // Bei incomplete prüfen, ob es ein Premium-Abo ist
+      // Im Entwicklungsmodus gewähren wir Zugriff auch bei incomplete, 
+      // da wir keine echten Zahlungen haben
+      if (plan === 'premium') {
+        displayStatus = 'active';
+        accessGranted = true;
+      } else {
+        displayStatus = 'pending';
+        accessGranted = false;
+      }
+      break;
+    case 'canceled':
+    case 'unpaid':
+    case 'incomplete_expired':
+      displayStatus = 'inactive';
+      accessGranted = false;
+      // Bei gekündigtem oder unbezahltem Abo zurück zum kostenlosen Plan
+      plan = 'free';
+      break;
+    default:
+      displayStatus = subscription.status;
+      accessGranted = false;
+  }
+  
+  console.log(`Status interpretation: Display: ${displayStatus}, Access: ${accessGranted}, Plan: ${plan}`);
   
   // Abonnementdaten in der Datenbank aktualisieren
   const subscriptionData = {
     user_id: userId,
     stripe_customer_id: customerId,
     stripe_subscription_id: subscription.id,
+    stripe_product_id: productId,
     status: subscription.status,
+    display_status: displayStatus,
+    access_granted: accessGranted,
     plan: plan,
     interval: subscription.items.data[0]?.plan.interval || 'month',
     current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
@@ -263,12 +380,29 @@ async function updateSubscriptionInDatabase(subscription: any, userId: string, c
     updated_at: new Date().toISOString(),
   };
   
+  console.log(`Inserting subscription data: ${JSON.stringify(subscriptionData)}`);
+  
   // Einfügen oder Aktualisieren des Abonnements
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('user_subscriptions')
     .upsert(subscriptionData);
   
   if (error) {
     console.error('Fehler beim Aktualisieren des Abonnements:', error);
+    // Für den Fehlerfall: Versuche eine alternative Methode mit insert
+    if (error.code === '23505') { // Duplicate key violation
+      console.log('Trying insert instead of upsert due to conflict');
+      const { error: insertError } = await supabase
+        .from('user_subscriptions')
+        .insert(subscriptionData);
+      
+      if (insertError) {
+        console.error('Insert also failed:', insertError);
+      } else {
+        console.log('Insert successful');
+      }
+    }
+  } else {
+    console.log(`Subscription data updated successfully: ${JSON.stringify(data)}`);
   }
 } 

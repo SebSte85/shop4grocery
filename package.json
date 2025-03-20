@@ -1,5 +1,5 @@
 {
-  "name": "shop4grocery",
+  "name": "korbklick",
   "version": "1.0.0",
   "main": "expo-router/entry",
   "scripts": {
@@ -28,6 +28,7 @@
     "expo-splash-screen": "~0.29.7",
     "expo-status-bar": "~2.0.0",
     "expo-web-browser": "^14.0.2",
+    "korbklick": "file:",
     "lottie-react-native": "^7.2.2",
     "nativewind": "^2.0.11",
     "react": "18.3.1",
@@ -40,7 +41,6 @@
     "react-native-screens": "~4.1.0",
     "react-native-url-polyfill": "^2.0.0",
     "react-native-web": "~0.19.6",
-    "shop4grocery": "file:",
     "tailwindcss": "^3.3.2",
     "zod": "^3.24.2"
   },

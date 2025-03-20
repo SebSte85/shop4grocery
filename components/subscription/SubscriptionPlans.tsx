@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -17,15 +17,25 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 
 export default function SubscriptionPlans() {
-  const { isSubscribed, subscription, plan, subscribe, isSubscribing } =
-    useSubscription();
+  const {
+    isSubscribed,
+    subscription,
+    plan,
+    subscribe,
+    isSubscribing,
+    cancelSubscription,
+  } = useSubscription();
   const { isInitialized, isLoading: isStripeLoading } = useInitStripe();
   const router = useRouter();
   const params = useLocalSearchParams();
   const queryClient = useQueryClient();
 
+  // Zustand für die Kündigung hinzufügen
+  const [isCancelling, setIsCancelling] = useState(false);
+
   // Erfolgreicher Checkout oder Redirect nach 3D Secure
   useEffect(() => {
+    // Nach erfolgreicher Zahlung oder Rückkehr zur App
     if (params.success === "true") {
       // Invalidiere den Subscription-Cache, damit der aktuelle Status neu geladen wird
       queryClient.invalidateQueries({ queryKey: ["subscription"] });
@@ -56,25 +66,26 @@ export default function SubscriptionPlans() {
       }
 
       const priceId = SUBSCRIPTION_PRICES.YEARLY;
-      console.log(`Subscribing with priceId: ${priceId}`);
+      console.log(`Starting subscription process for price ID: ${priceId}`);
 
       const result = await subscribe(priceId);
       console.log(`Subscription result:`, JSON.stringify(result));
 
       if (result.status === "succeeded") {
-        // Die PaymentSheet hat die Zahlung erfolgreich verarbeitet
-        // Der Abonnement-Status wird über Webhooks aktualisiert
+        // PaymentSheet erfolgreich bearbeitet
+        // Subscription wird asynchron über Webhooks aktiviert
+        // Wir laden den Status neu, um das UI zu aktualisieren
         queryClient.invalidateQueries({ queryKey: ["subscription"] });
 
         Alert.alert(
-          "Abonnement erfolgreich",
-          "Vielen Dank für dein Abonnement! Du hast jetzt Zugriff auf alle Premium-Funktionen.",
+          "Zahlung erfolgreich",
+          "Vielen Dank für deine Zahlung! Dein Premium-Abo wird in Kürze aktiviert.",
           [{ text: "OK" }]
         );
       } else if (result.status === "canceled") {
         Alert.alert(
           "Abonnement abgebrochen",
-          "Du hast den Checkout-Prozess abgebrochen. Du kannst es jederzeit erneut versuchen.",
+          "Du hast den Zahlungsprozess abgebrochen. Du kannst es jederzeit erneut versuchen.",
           [{ text: "OK" }]
         );
       }
@@ -87,6 +98,42 @@ export default function SubscriptionPlans() {
         [{ text: "OK" }]
       );
     }
+  };
+
+  // Funktion zur Abonnement-Kündigung
+  const handleCancelSubscription = async () => {
+    Alert.alert(
+      "Abonnement kündigen",
+      "Möchtest du dein Premium-Abonnement wirklich kündigen? Du kannst die Premium-Funktionen dann noch bis zum Ende der aktuellen Abrechnungsperiode nutzen.",
+      [
+        {
+          text: "Abbrechen",
+          style: "cancel",
+        },
+        {
+          text: "Kündigen",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setIsCancelling(true);
+              await cancelSubscription(false); // false = kündigen zum Ende der Abrechnungsperiode
+              Alert.alert(
+                "Abonnement gekündigt",
+                "Dein Abonnement wurde erfolgreich gekündigt. Du kannst die Premium-Funktionen noch bis zum Ende der aktuellen Abrechnungsperiode nutzen."
+              );
+            } catch (error) {
+              console.error("Error cancelling subscription:", error);
+              Alert.alert(
+                "Fehler",
+                "Die Kündigung konnte nicht durchgeführt werden. Bitte versuche es später erneut."
+              );
+            } finally {
+              setIsCancelling(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   if (isStripeLoading) {
@@ -103,17 +150,42 @@ export default function SubscriptionPlans() {
   // Zeige den aktuellen Abonnement-Status
   const renderSubscriptionStatus = () => {
     if (isSubscribed) {
+      const endDate = subscription?.current_period_end
+        ? new Date(subscription.current_period_end).toLocaleDateString()
+        : "unbekannt";
+
+      // Prüfen, ob das Abonnement bereits zur Kündigung vorgemerkt ist
+      const isCanceled = subscription?.cancel_at_period_end;
+
       return (
-        <View className="mb-6 p-4 bg-indigo-50 rounded-lg">
-          <Text className="text-lg font-semibold text-indigo-800 mb-2">
+        <View className="mb-6 p-4 bg-primary-1/10 rounded-lg border border-primary-1/30">
+          <Text className="text-lg font-semibold text-primary-1 mb-2">
             Premium-Abonnement aktiv
           </Text>
-          <Text className="text-sm text-indigo-700">
+          <Text className="text-sm text-gray-300 mb-2">
             Dein {plan === "premium" ? "Premium" : ""} Abonnement ist aktiv bis{" "}
-            {subscription?.current_period_end
-              ? new Date(subscription.current_period_end).toLocaleDateString()
-              : "unbekannt"}
+            {endDate}
           </Text>
+
+          {isCanceled ? (
+            <Text className="text-sm text-orange-400 mt-2">
+              Dein Abonnement wurde gekündigt und endet am {endDate}.
+            </Text>
+          ) : (
+            <TouchableOpacity
+              onPress={handleCancelSubscription}
+              disabled={isCancelling}
+              className="mt-3 py-2 px-4 bg-black-2 border border-red-500 rounded-lg"
+            >
+              {isCancelling ? (
+                <ActivityIndicator size="small" color="#ef4444" />
+              ) : (
+                <Text className="text-red-500 text-center font-medium font-rubik">
+                  Abonnement kündigen
+                </Text>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
       );
     }
@@ -123,63 +195,63 @@ export default function SubscriptionPlans() {
   return (
     <ScrollView
       contentContainerStyle={{ flexGrow: 1 }}
-      className="flex-1 bg-white px-4 pt-6"
+      className="flex-1 bg-black-1 px-4 pt-6"
     >
       <View className="mb-8">
-        <Text className="text-2xl font-bold text-gray-800 mb-2 font-rubik">
+        <Text className="text-2xl font-bold text-white mb-2 font-rubik">
           Premium-Funktionen freischalten
         </Text>
-        <Text className="text-base text-gray-600 mb-6 font-rubik">
+        <Text className="text-base text-gray-300 mb-6 font-rubik">
           Genieße alle Premium-Funktionen mit unserem Jahresabonnement.
         </Text>
 
         {renderSubscriptionStatus()}
 
-        <View className="bg-white rounded-xl shadow-md overflow-hidden mb-8 border border-gray-200">
+        <View className="bg-black-2 rounded-xl shadow-md overflow-hidden mb-8 border border-gray-700">
           <View className="p-6">
             <View className="flex-row justify-between items-center mb-4">
-              <Text className="text-xl font-bold text-gray-800 font-rubik">
+              <Text className="text-xl font-bold text-white font-rubik">
                 Jahresabonnement
               </Text>
-              <View className="bg-indigo-100 px-3 py-1 rounded-full">
-                <Text className="text-sm font-semibold text-indigo-700 font-rubik">
+              <View className="bg-primary-1/20 px-3 py-1 rounded-full">
+                <Text className="text-sm font-semibold text-primary-1 font-rubik">
                   Premium
                 </Text>
               </View>
             </View>
 
-            <Text className="text-2xl font-bold text-gray-900 mb-4 font-rubik">
+            <Text className="text-2xl font-bold text-white mb-4 font-rubik">
               4,99 € / Jahr
             </Text>
 
             <View className="mb-6">
               <View className="flex-row items-center mb-2">
-                <Text className="text-green-600 mr-2">✓</Text>
-                <Text className="text-gray-700 font-rubik">
+                <Text className="text-green-500 mr-2">✓</Text>
+                <Text className="text-gray-300 font-rubik">
                   Unbegrenzte Einkaufslisten
                 </Text>
               </View>
               <View className="flex-row items-center mb-2">
-                <Text className="text-green-600 mr-2">✓</Text>
-                <Text className="text-gray-700 font-rubik">
+                <Text className="text-green-500 mr-2">✓</Text>
+                <Text className="text-gray-300 font-rubik">
                   Unbegrenzte Artikel pro Liste
                 </Text>
               </View>
               <View className="flex-row items-center mb-2">
-                <Text className="text-green-600 mr-2">✓</Text>
-                <Text className="text-gray-700 font-rubik">
+                <Text className="text-green-500 mr-2">✓</Text>
+                <Text className="text-gray-300 font-rubik">
                   Teilen von Listen mit anderen
                 </Text>
               </View>
               <View className="flex-row items-center mb-2">
-                <Text className="text-green-600 mr-2">✓</Text>
-                <Text className="text-gray-700 font-rubik">
+                <Text className="text-green-500 mr-2">✓</Text>
+                <Text className="text-gray-300 font-rubik">
                   365 Tage Verlauf
                 </Text>
               </View>
               <View className="flex-row items-center">
-                <Text className="text-green-600 mr-2">✓</Text>
-                <Text className="text-gray-700 font-rubik">Keine Werbung</Text>
+                <Text className="text-green-500 mr-2">✓</Text>
+                <Text className="text-gray-300 font-rubik">Keine Werbung</Text>
               </View>
             </View>
 
@@ -187,8 +259,8 @@ export default function SubscriptionPlans() {
               <TouchableOpacity
                 className={`py-3 px-4 rounded-lg ${
                   isSubscribing
-                    ? "bg-gray-400"
-                    : "bg-indigo-600 active:bg-indigo-700"
+                    ? "bg-gray-600"
+                    : "bg-primary-1 active:bg-primary-1/80"
                 }`}
                 onPress={handleSubscribe}
                 disabled={isSubscribing}
@@ -206,13 +278,13 @@ export default function SubscriptionPlans() {
         </View>
 
         <View className="mb-6">
-          <Text className="text-sm text-gray-500 mb-2 font-rubik">
+          <Text className="text-sm text-gray-400 mb-2 font-rubik">
             • Alle Zahlungen werden über Stripe verarbeitet
           </Text>
-          <Text className="text-sm text-gray-500 mb-2 font-rubik">
+          <Text className="text-sm text-gray-400 mb-2 font-rubik">
             • Das Abonnement verlängert sich automatisch nach einem Jahr
           </Text>
-          <Text className="text-sm text-gray-500 font-rubik">
+          <Text className="text-sm text-gray-400 font-rubik">
             • Abonnements können jederzeit in den Einstellungen gekündigt werden
           </Text>
         </View>

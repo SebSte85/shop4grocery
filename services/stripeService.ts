@@ -30,7 +30,7 @@ export const initializeStripe = async () => {
   try {
     await initStripe({
       publishableKey: PUBLISHABLE_KEY as string,
-      merchantIdentifier: 'merchant.com.shop4grocery', // Only needed for Apple Pay
+      merchantIdentifier: 'merchant.com.korbklick', // Only needed for Apple Pay
       urlScheme: 'korbklick', // Needed for 3D Secure and bank redirects
     });
     console.log('Stripe initialized successfully');
@@ -41,8 +41,8 @@ export const initializeStripe = async () => {
   }
 };
 
-// Create and handle subscription payment with PaymentSheet
-export const createCheckoutSession = async (priceId: string, userId: string) => {
+// Create a subscription following Stripe's documented approach
+export const createSubscription = async (priceId: string, userId: string) => {
   try {
     console.log(`Creating subscription with price: ${priceId} for user: ${userId}`);
     const { data: authData, error: authError } = await supabase.auth.getSession();
@@ -52,9 +52,9 @@ export const createCheckoutSession = async (priceId: string, userId: string) => 
       throw new Error('Not authenticated');
     }
 
-    // Fetch the payment intent details from your backend
-    console.log(`Calling Supabase function: ${SUPABASE_URL}/functions/v1/create-subscription-intent`);
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/create-subscription-intent`, {
+    // 1. Erstelle eine Subscription auf dem Server (Status: incomplete)
+    console.log(`Calling Supabase function: ${SUPABASE_URL}/functions/v1/create-subscription`);
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/create-subscription`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -62,38 +62,33 @@ export const createCheckoutSession = async (priceId: string, userId: string) => 
       },
       body: JSON.stringify({ 
         priceId, 
-        userId 
+        userId,
+        // Explizite Metadaten für bessere Nachverfolgung
+        metadata: {
+          userId: userId,
+          subscriptionType: 'premium'
+        }
       }),
     });
 
     if (!response.ok) {
       const errorData = await response.json();
-      console.error('Subscription intent creation failed:', errorData);
+      console.error('Subscription creation failed:', errorData);
       throw new Error(errorData.error || 'Failed to create subscription');
     }
 
-    const {
-      paymentIntentClientSecret,
-      ephemeralKey,
-      customer,
-      subscription
-    } = await response.json();
+    const { subscriptionId, clientSecret, status } = await response.json();
+    console.log(`Subscription created with ID: ${subscriptionId}, status: ${status}`);
 
-    console.log('Payment details received successfully');
-
-    // Initialize the Payment Sheet according to Stripe docs
+    // 2. Initialisiere den PaymentSheet mit dem Client Secret vom PaymentIntent
+    console.log('Initializing payment sheet...');
     const { error: initError } = await initPaymentSheet({
-      customerId: customer,
-      customerEphemeralKeySecret: ephemeralKey,
-      paymentIntentClientSecret,
-      // Enable Apple Pay / Google Pay
-      merchantDisplayName: 'Shop4Grocery',
-      // Set up return URL for 3D Secure flows
+      paymentIntentClientSecret: clientSecret,
+      merchantDisplayName: 'Korbklick',
       returnURL: 'korbklick://subscription',
-      // Appearance
       appearance: {
         colors: {
-          primary: '#8b5cf6', // Lila wie in der App
+          primary: '#8b5cf6', // Violet color to match app theme
         },
       },
     });
@@ -103,7 +98,8 @@ export const createCheckoutSession = async (priceId: string, userId: string) => 
       throw new Error(`Failed to initialize payment: ${initError.message}`);
     }
 
-    // Present the Payment Sheet
+    // 3. Zeige den PaymentSheet an
+    console.log('Presenting payment sheet...');
     const { error: presentError } = await presentPaymentSheet();
 
     if (presentError) {
@@ -111,23 +107,48 @@ export const createCheckoutSession = async (priceId: string, userId: string) => 
       if (presentError.code === 'Canceled') {
         return { 
           status: 'canceled',
-          subscription: null
+          subscriptionId 
         };
       }
       throw new Error(`Payment failed: ${presentError.message}`);
     }
 
-    // If we reach here, payment was successful
-    console.log('Payment successful!');
+    // 4. Payment erfolgreich - die Subscription wird automatisch aktiviert
+    console.log('Payment successful! Subscription should be activated soon.');
+    
+    // 5. Manuelle Aktualisierung der user_subscriptions Tabelle als Fallback
+    // Falls der Webhook nicht richtig funktioniert, stellen wir sicher, dass ein Eintrag existiert
+    try {
+      const { error: dbError } = await supabase.from('user_subscriptions').upsert({
+        user_id: userId,
+        stripe_subscription_id: subscriptionId,
+        status: 'active', // optimistisch als aktiv markieren
+        plan: 'premium',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      });
+      
+      if (dbError) {
+        console.log('Fallback DB update error (non-critical):', dbError);
+      } else {
+        console.log('Fallback DB update successful');
+      }
+    } catch (dbErr) {
+      console.log('Error during fallback DB update (non-critical):', dbErr);
+    }
+    
     return { 
       status: 'succeeded',
-      subscription
+      subscriptionId
     };
   } catch (error) {
     console.error('Error in subscription process:', error);
     throw error;
   }
 };
+
+// For backward compatibility
+export const createCheckoutSession = createSubscription;
 
 // Check if user has an active subscription
 export const checkSubscriptionStatus = async (userId: string) => {
@@ -137,7 +158,6 @@ export const checkSubscriptionStatus = async (userId: string) => {
       .from('user_subscriptions')
       .select('*')
       .eq('user_id', userId)
-      .eq('status', 'active')
       .maybeSingle();
     
     // Bei Data-Nicht-Nullness prüfen, statt Fehler zu werfen
@@ -146,17 +166,72 @@ export const checkSubscriptionStatus = async (userId: string) => {
       console.warn('Subscription check warning:', error);
     }
     
+    // Überprüfen, ob es ein aktives oder zahlendes Abonnement ist
+    // Für Entwicklungszwecke: Wir betrachten auch 'incomplete' mit Premium Plan als aktiv,
+    // da wir in der Testumgebung keine echten Zahlungen verarbeiten
+    const isActive = data?.status === 'active' || 
+                     data?.status === 'trialing' || 
+                     (data?.status === 'incomplete' && data?.plan === 'premium');
+    
+    console.log(`Subscription check: Status=${data?.status}, Plan=${data?.plan}, isActive=${isActive}`);
+    
     return {
-      isSubscribed: !!data,
+      isSubscribed: isActive,
       subscription: data || null,
-      plan: data?.plan || 'free' // Standard-Plan ist "free", wenn kein Abo gefunden wird
+      plan: data?.plan || 'free', // Standard-Plan ist "free", wenn kein Abo gefunden wird
+      
+      // Erweiterte Status-Informationen
+      displayStatus: data?.display_status || 'inactive',
+      accessGranted: data?.access_granted || false,
+      needsAttention: data?.status === 'past_due'
     };
   } catch (error) {
     console.error('Error checking subscription status:', error);
     return { 
       isSubscribed: false, 
       subscription: null,
-      plan: 'free'
+      plan: 'free',
+      displayStatus: 'inactive',
+      accessGranted: false,
+      needsAttention: false
     };
+  }
+};
+
+// Subscription beenden entsprechend der Stripe-Dokumentation
+export const cancelSubscription = async (subscriptionId: string, cancelImmediately = false) => {
+  try {
+    console.log(`Cancelling subscription: ${subscriptionId}, immediate: ${cancelImmediately}`);
+    const { data: authData, error: authError } = await supabase.auth.getSession();
+    
+    if (authError || !authData.session) {
+      console.error('Authentication error:', authError);
+      throw new Error('Not authenticated');
+    }
+
+    // Rufe den Supabase Endpunkt zur Kündigung auf
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/cancel-subscription`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authData.session.access_token}`,
+      },
+      body: JSON.stringify({ 
+        subscriptionId,
+        cancelImmediately
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Subscription cancellation failed:', errorData);
+      throw new Error(errorData.error || 'Failed to cancel subscription');
+    }
+
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    console.error('Error cancelling subscription:', error);
+    throw error;
   }
 }; 
