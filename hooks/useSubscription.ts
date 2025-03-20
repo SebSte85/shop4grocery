@@ -39,6 +39,12 @@ export function useSubscription() {
     return subscribeAsync(priceId);
   };
 
+  // Check if user has access to a specific feature
+  const hasFeature = (feature: keyof SubscriptionFeatures) => {
+    const features = getFeatures();
+    return features[feature] === true;
+  };
+
   // Get features based on subscription plan
   const getFeatures = () => {
     const plan = (data?.plan || 'free') as SubscriptionPlan;
@@ -68,14 +74,15 @@ export function useSubscription() {
   };
 
   return {
-    isSubscribed: !!data?.isSubscribed,
-    subscription: data?.subscription as UserSubscription | null,
+    isSubscribed: data?.isSubscribed || false,
+    subscription: data?.subscription || null,
+    plan: data?.plan || 'free' as SubscriptionPlan,
     isLoading,
     error,
     subscribe,
     isSubscribing,
-    plan: (data?.plan || 'free') as SubscriptionPlan,
-    features: getFeatures(),
+    hasFeature,
+    getFeatures,
     canUseFeature,
     isLimitExceeded,
   };

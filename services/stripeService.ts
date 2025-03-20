@@ -1,8 +1,12 @@
-import { initStripe } from '@stripe/stripe-react-native';
-import { supabase } from '@/lib/supabase';
+import { 
+  initStripe, 
+  initPaymentSheet, 
+  presentPaymentSheet 
+} from '@stripe/stripe-react-native';
+import { supabase } from '@/lib/supabase'; // Benutze den existierenden authentifizierten Client
 import { Platform } from 'react-native';
 
-// Environment variables for Stripe
+// Stripe Keys aus den Umgebungsvariablen
 const PUBLISHABLE_KEY = 
   process.env.NODE_ENV === 'production'
     ? process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY_LIVE
@@ -37,49 +41,90 @@ export const initializeStripe = async () => {
   }
 };
 
-// Create a checkout session for subscription using Supabase Function
+// Create and handle subscription payment with PaymentSheet
 export const createCheckoutSession = async (priceId: string, userId: string) => {
   try {
-    console.log(`Creating checkout session for price: ${priceId} and user: ${userId}`);
-    const { data: authData } = await supabase.auth.getSession();
+    console.log(`Creating subscription with price: ${priceId} for user: ${userId}`);
+    const { data: authData, error: authError } = await supabase.auth.getSession();
     
-    if (!authData.session) {
+    if (authError || !authData.session) {
+      console.error('Authentication error:', authError);
       throw new Error('Not authenticated');
     }
 
-    console.log(`Calling Supabase function at: ${SUPABASE_URL}/functions/v1/create-checkout`);
-    // Call the Supabase Function to create a checkout session
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/create-checkout`, {
+    // Fetch the payment intent details from your backend
+    console.log(`Calling Supabase function: ${SUPABASE_URL}/functions/v1/create-subscription-intent`);
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/create-subscription-intent`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${authData.session.access_token}`,
       },
-      body: JSON.stringify({ priceId, userId }),
+      body: JSON.stringify({ 
+        priceId, 
+        userId 
+      }),
     });
 
     if (!response.ok) {
       const errorData = await response.json();
-      console.error('Checkout session creation failed:', errorData);
-      throw new Error(errorData.error || 'Failed to create checkout session');
+      console.error('Subscription intent creation failed:', errorData);
+      throw new Error(errorData.error || 'Failed to create subscription');
     }
 
-    const sessionData = await response.json();
-    console.log('Checkout session created successfully:', {
-      sessionId: sessionData.sessionId,
-      hasUrl: !!sessionData.url
+    const {
+      paymentIntentClientSecret,
+      ephemeralKey,
+      customer,
+      subscription
+    } = await response.json();
+
+    console.log('Payment details received successfully');
+
+    // Initialize the Payment Sheet according to Stripe docs
+    const { error: initError } = await initPaymentSheet({
+      customerId: customer,
+      customerEphemeralKeySecret: ephemeralKey,
+      paymentIntentClientSecret,
+      // Enable Apple Pay / Google Pay
+      merchantDisplayName: 'Shop4Grocery',
+      // Set up return URL for 3D Secure flows
+      returnURL: 'korbklick://subscription',
+      // Appearance
+      appearance: {
+        colors: {
+          primary: '#8b5cf6', // Lila wie in der App
+        },
+      },
     });
 
-    // Check if we're on a native platform to open browser for payment
-    if (Platform.OS !== 'web' && sessionData.url) {
-      console.log(`Native platform detected: ${Platform.OS}, URL available`);
-      // We'll implement opening the URL in our component using Linking or WebBrowser
-      return sessionData;
+    if (initError) {
+      console.error('Error initializing payment sheet:', initError);
+      throw new Error(`Failed to initialize payment: ${initError.message}`);
     }
 
-    return sessionData;
+    // Present the Payment Sheet
+    const { error: presentError } = await presentPaymentSheet();
+
+    if (presentError) {
+      console.error('Error presenting payment sheet:', presentError);
+      if (presentError.code === 'Canceled') {
+        return { 
+          status: 'canceled',
+          subscription: null
+        };
+      }
+      throw new Error(`Payment failed: ${presentError.message}`);
+    }
+
+    // If we reach here, payment was successful
+    console.log('Payment successful!');
+    return { 
+      status: 'succeeded',
+      subscription
+    };
   } catch (error) {
-    console.error('Error creating checkout session:', error);
+    console.error('Error in subscription process:', error);
     throw error;
   }
 };
@@ -87,21 +132,31 @@ export const createCheckoutSession = async (priceId: string, userId: string) => 
 // Check if user has an active subscription
 export const checkSubscriptionStatus = async (userId: string) => {
   try {
+    // Verwende maybeSingle() statt single(), um Fehler bei keinem Ergebnis zu vermeiden
     const { data, error } = await supabase
       .from('user_subscriptions')
       .select('*')
       .eq('user_id', userId)
       .eq('status', 'active')
-      .single();
+      .maybeSingle();
     
-    if (error) throw error;
+    // Bei Data-Nicht-Nullness prüfen, statt Fehler zu werfen
+    if (error && error.code !== 'PGRST116') {
+      // Werfe nur "echte" Fehler, nicht den "Keine Zeilen gefunden"-Fehler
+      console.warn('Subscription check warning:', error);
+    }
     
     return {
       isSubscribed: !!data,
-      subscription: data || null
+      subscription: data || null,
+      plan: data?.plan || 'free' // Standard-Plan ist "free", wenn kein Abo gefunden wird
     };
   } catch (error) {
     console.error('Error checking subscription status:', error);
-    return { isSubscribed: false, subscription: null };
+    return { 
+      isSubscribed: false, 
+      subscription: null,
+      plan: 'free'
+    };
   }
 }; 

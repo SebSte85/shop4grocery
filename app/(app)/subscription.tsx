@@ -10,6 +10,12 @@ export default function SubscriptionScreen() {
         options={{
           title: "Premium Funktionen",
           headerTitleAlign: "center",
+          headerShown: true,
+          headerStyle: {
+            backgroundColor: "#011A38",
+          },
+          headerTintColor: "#fff",
+          presentation: "card",
         }}
       />
       <SubscriptionPlans />

@@ -13,19 +13,23 @@ import {
 import { useSubscription } from "@/hooks/useSubscription";
 import { SUBSCRIPTION_PRICES } from "@/services/stripeService";
 import { useInitStripe } from "@/hooks/useInitStripe";
-import * as WebBrowser from "expo-web-browser";
 import { useRouter, useLocalSearchParams } from "expo-router";
+import { useQueryClient } from "@tanstack/react-query";
 
 export default function SubscriptionPlans() {
   const { isSubscribed, subscription, plan, subscribe, isSubscribing } =
     useSubscription();
-  const { isLoading: isStripeLoading } = useInitStripe();
+  const { isInitialized, isLoading: isStripeLoading } = useInitStripe();
   const router = useRouter();
   const params = useLocalSearchParams();
+  const queryClient = useQueryClient();
 
-  // Erfolgreicher Checkout
+  // Erfolgreicher Checkout oder Redirect nach 3D Secure
   useEffect(() => {
-    if (params.success === "true" && params.session_id) {
+    if (params.success === "true") {
+      // Invalidiere den Subscription-Cache, damit der aktuelle Status neu geladen wird
+      queryClient.invalidateQueries({ queryKey: ["subscription"] });
+
       Alert.alert(
         "Abonnement erfolgreich",
         "Vielen Dank für dein Abonnement! Du hast jetzt Zugriff auf alle Premium-Funktionen.",
@@ -38,44 +42,48 @@ export default function SubscriptionPlans() {
         [{ text: "OK" }]
       );
     }
-  }, [params]);
+  }, [params, queryClient]);
 
   const handleSubscribe = async () => {
     try {
+      if (!isInitialized) {
+        Alert.alert(
+          "Fehler",
+          "Stripe wurde noch nicht initialisiert. Bitte versuche es später erneut.",
+          [{ text: "OK" }]
+        );
+        return;
+      }
+
       const priceId = SUBSCRIPTION_PRICES.YEARLY;
       console.log(`Subscribing with priceId: ${priceId}`);
 
-      const sessionData = await subscribe(priceId);
-      console.log(`Session data received:`, JSON.stringify(sessionData));
+      const result = await subscribe(priceId);
+      console.log(`Subscription result:`, JSON.stringify(result));
 
-      if (sessionData?.url) {
-        console.log(`Opening browser with URL: ${sessionData.url}`);
-        try {
-          // URL im Browser öffnen
-          const result = await WebBrowser.openBrowserAsync(sessionData.url);
-          console.log(`Browser result:`, JSON.stringify(result));
-        } catch (browserError: any) {
-          console.error(`Error opening browser:`, browserError);
-          Alert.alert(
-            "Browser-Fehler",
-            "Die Zahlungsseite konnte nicht geöffnet werden. Fehler: " +
-              browserError.message,
-            [{ text: "OK" }]
-          );
-        }
-      } else {
-        console.error(`No URL received in session data`);
+      if (result.status === "succeeded") {
+        // Die PaymentSheet hat die Zahlung erfolgreich verarbeitet
+        // Der Abonnement-Status wird über Webhooks aktualisiert
+        queryClient.invalidateQueries({ queryKey: ["subscription"] });
+
         Alert.alert(
-          "Fehler",
-          "Keine gültige Zahlungs-URL erhalten. Bitte versuche es später erneut.",
+          "Abonnement erfolgreich",
+          "Vielen Dank für dein Abonnement! Du hast jetzt Zugriff auf alle Premium-Funktionen.",
+          [{ text: "OK" }]
+        );
+      } else if (result.status === "canceled") {
+        Alert.alert(
+          "Abonnement abgebrochen",
+          "Du hast den Checkout-Prozess abgebrochen. Du kannst es jederzeit erneut versuchen.",
           [{ text: "OK" }]
         );
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Fehler beim Abonnieren:", error);
       Alert.alert(
         "Fehler",
-        "Beim Erstellen des Abonnements ist ein Fehler aufgetreten. Bitte versuche es später erneut.",
+        "Beim Erstellen des Abonnements ist ein Fehler aufgetreten: " +
+          error.message,
         [{ text: "OK" }]
       );
     }
@@ -92,113 +100,123 @@ export default function SubscriptionPlans() {
     );
   }
 
-  return (
-    <ScrollView className="flex-1 bg-black-1 p-4">
-      <View className="py-4">
-        <Text className="text-white font-rubik-bold text-2xl text-center mb-2">
-          Premium-Funktionen freischalten
-        </Text>
-        <Text className="text-gray-400 font-rubik text-center mb-6">
-          Mit Premium erhältst du Zugriff auf alle Funktionen
-        </Text>
-
-        {isSubscribed && (
-          <View className="bg-gradient-to-br from-violet-800 to-purple-600 p-4 rounded-lg mb-6">
-            <Text className="text-white font-rubik-bold text-lg">
-              Du hast bereits ein {plan === "premium" ? "Premium" : ""}{" "}
-              Abonnement!
-            </Text>
-            <Text className="text-white font-rubik mt-2">
-              Nächste Abrechnung:{" "}
-              {new Date(
-                subscription?.current_period_end || ""
-              ).toLocaleDateString()}
-            </Text>
-          </View>
-        )}
-
-        {/* Free Plan */}
-        <View className="bg-black-2 rounded-lg p-4 mb-4">
-          <Text className="text-white font-rubik-bold text-xl">Kostenlos</Text>
-          <Text className="text-primary-1 font-rubik-bold text-2xl mt-2">
-            €0.00
+  // Zeige den aktuellen Abonnement-Status
+  const renderSubscriptionStatus = () => {
+    if (isSubscribed) {
+      return (
+        <View className="mb-6 p-4 bg-indigo-50 rounded-lg">
+          <Text className="text-lg font-semibold text-indigo-800 mb-2">
+            Premium-Abonnement aktiv
           </Text>
-          <Text className="text-gray-400 font-rubik mt-4">Enthält:</Text>
-          <View className="mt-2 space-y-2">
-            <FeatureItem text="Max. 3 Einkaufslisten" included />
-            <FeatureItem text="Max. 20 Artikel pro Liste" included />
-            <FeatureItem text="Kategorisierung" included />
-            <FeatureItem text="Einkaufshistorie für 7 Tage" included />
-            <FeatureItem text="Listen teilen" included={false} />
-            <FeatureItem text="Kein Werbung" included={false} />
-          </View>
-          <Text className="text-gray-400 font-rubik mt-4 text-center">
-            {plan === "free" ? "Dein aktueller Plan" : ""}
+          <Text className="text-sm text-indigo-700">
+            Dein {plan === "premium" ? "Premium" : ""} Abonnement ist aktiv bis{" "}
+            {subscription?.current_period_end
+              ? new Date(subscription.current_period_end).toLocaleDateString()
+              : "unbekannt"}
           </Text>
         </View>
+      );
+    }
+    return null;
+  };
 
-        {/* Premium Plan */}
-        <View className="bg-gradient-to-br from-violet-900 to-purple-900 rounded-lg p-4 mb-4 border border-primary-1">
-          <View className="bg-primary-1 self-start px-3 py-1 rounded-full mb-2">
-            <Text className="text-white font-rubik-bold text-xs">
-              EMPFOHLEN
+  return (
+    <ScrollView
+      contentContainerStyle={{ flexGrow: 1 }}
+      className="flex-1 bg-white px-4 pt-6"
+    >
+      <View className="mb-8">
+        <Text className="text-2xl font-bold text-gray-800 mb-2 font-rubik">
+          Premium-Funktionen freischalten
+        </Text>
+        <Text className="text-base text-gray-600 mb-6 font-rubik">
+          Genieße alle Premium-Funktionen mit unserem Jahresabonnement.
+        </Text>
+
+        {renderSubscriptionStatus()}
+
+        <View className="bg-white rounded-xl shadow-md overflow-hidden mb-8 border border-gray-200">
+          <View className="p-6">
+            <View className="flex-row justify-between items-center mb-4">
+              <Text className="text-xl font-bold text-gray-800 font-rubik">
+                Jahresabonnement
+              </Text>
+              <View className="bg-indigo-100 px-3 py-1 rounded-full">
+                <Text className="text-sm font-semibold text-indigo-700 font-rubik">
+                  Premium
+                </Text>
+              </View>
+            </View>
+
+            <Text className="text-2xl font-bold text-gray-900 mb-4 font-rubik">
+              4,99 € / Jahr
             </Text>
+
+            <View className="mb-6">
+              <View className="flex-row items-center mb-2">
+                <Text className="text-green-600 mr-2">✓</Text>
+                <Text className="text-gray-700 font-rubik">
+                  Unbegrenzte Einkaufslisten
+                </Text>
+              </View>
+              <View className="flex-row items-center mb-2">
+                <Text className="text-green-600 mr-2">✓</Text>
+                <Text className="text-gray-700 font-rubik">
+                  Unbegrenzte Artikel pro Liste
+                </Text>
+              </View>
+              <View className="flex-row items-center mb-2">
+                <Text className="text-green-600 mr-2">✓</Text>
+                <Text className="text-gray-700 font-rubik">
+                  Teilen von Listen mit anderen
+                </Text>
+              </View>
+              <View className="flex-row items-center mb-2">
+                <Text className="text-green-600 mr-2">✓</Text>
+                <Text className="text-gray-700 font-rubik">
+                  365 Tage Verlauf
+                </Text>
+              </View>
+              <View className="flex-row items-center">
+                <Text className="text-green-600 mr-2">✓</Text>
+                <Text className="text-gray-700 font-rubik">Keine Werbung</Text>
+              </View>
+            </View>
+
+            {!isSubscribed && (
+              <TouchableOpacity
+                className={`py-3 px-4 rounded-lg ${
+                  isSubscribing
+                    ? "bg-gray-400"
+                    : "bg-indigo-600 active:bg-indigo-700"
+                }`}
+                onPress={handleSubscribe}
+                disabled={isSubscribing}
+              >
+                {isSubscribing ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Text className="text-white text-center font-semibold font-rubik">
+                    Jetzt abonnieren
+                  </Text>
+                )}
+              </TouchableOpacity>
+            )}
           </View>
-          <Text className="text-white font-rubik-bold text-xl">Premium</Text>
-          <Text className="text-primary-1 font-rubik-bold text-2xl mt-2">
-            €4.99
-            <Text className="text-gray-400 font-rubik text-sm"> / Jahr</Text>
+        </View>
+
+        <View className="mb-6">
+          <Text className="text-sm text-gray-500 mb-2 font-rubik">
+            • Alle Zahlungen werden über Stripe verarbeitet
           </Text>
-          <Text className="text-gray-300 font-rubik mt-4">Enthält:</Text>
-          <View className="mt-2 space-y-2">
-            <FeatureItem text="Unbegrenzte Einkaufslisten" included />
-            <FeatureItem text="Unbegrenzte Artikel pro Liste" included />
-            <FeatureItem text="Kategorisierung" included />
-            <FeatureItem text="Komplette Einkaufshistorie" included />
-            <FeatureItem text="Listen teilen mit Freunden" included />
-            <FeatureItem text="Keine Werbung" included />
-            <FeatureItem text="Premium Support" included />
-          </View>
-          <TouchableOpacity
-            className={`bg-primary-1 py-4 rounded-lg mt-6 ${
-              isSubscribing ? "opacity-70" : ""
-            }`}
-            onPress={handleSubscribe}
-            disabled={isSubscribing || isSubscribed}
-          >
-            <Text className="text-white font-rubik-bold text-center">
-              {isSubscribing
-                ? "Verarbeitung..."
-                : isSubscribed
-                ? "Bereits abonniert"
-                : "Jetzt upgraden"}
-            </Text>
-          </TouchableOpacity>
+          <Text className="text-sm text-gray-500 mb-2 font-rubik">
+            • Das Abonnement verlängert sich automatisch nach einem Jahr
+          </Text>
+          <Text className="text-sm text-gray-500 font-rubik">
+            • Abonnements können jederzeit in den Einstellungen gekündigt werden
+          </Text>
         </View>
       </View>
     </ScrollView>
-  );
-}
-
-function FeatureItem({ text, included }: { text: string; included: boolean }) {
-  return (
-    <View className="flex-row items-center">
-      <View
-        className={`w-5 h-5 rounded-full mr-2 items-center justify-center ${
-          included ? "bg-primary-1" : "bg-gray-700"
-        }`}
-      >
-        {included ? (
-          <Text className="text-white text-xs">✓</Text>
-        ) : (
-          <Text className="text-white text-xs">✗</Text>
-        )}
-      </View>
-      <Text
-        className={`font-rubik ${included ? "text-white" : "text-gray-500"}`}
-      >
-        {text}
-      </Text>
-    </View>
   );
 }

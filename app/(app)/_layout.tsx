@@ -45,6 +45,12 @@ export default function AppLayout() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="subscription"
+        options={{
+          href: null,
+        }}
+      />
     </Tabs>
   );
 }
