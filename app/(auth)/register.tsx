@@ -185,24 +185,6 @@ export default function RegisterScreen() {
               {isLoading ? "Registrieren..." : "Registrieren"}
             </Text>
           </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={handleGoogleSignUp}
-            className={`bg-black-2 py-4 rounded-lg flex-row justify-center items-center ${
-              isLoading ? "opacity-50" : ""
-            }`}
-            disabled={isLoading}
-          >
-            <Ionicons
-              name="logo-google"
-              size={20}
-              color="white"
-              style={{ marginRight: 10 }}
-            />
-            <Text className="text-white font-rubik text-center">
-              {isLoading ? "Registrieren..." : "Mit Google registrieren"}
-            </Text>
-          </TouchableOpacity>
         </View>
 
         <View className="mt-8">

@@ -6,6 +6,8 @@ import {
   TextInput,
   Keyboard,
   Alert,
+  Platform,
+  Animated,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
@@ -29,6 +31,10 @@ export default function AddItemsScreen() {
   const createCustomItem = useCreateCustomItem();
   const inputRef = useRef<TextInput>(null);
   const { data: categories } = useCategories();
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Animation values
+  const toastAnimation = useRef(new Animated.Value(-100)).current;
 
   const [selectedItems, setSelectedItems] = useState<
     Record<string, { quantity: number; notes?: string }>
@@ -39,12 +45,37 @@ export default function AddItemsScreen() {
   useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedSearchText(searchText);
-    }, 300); // 300ms Verzögerung
+    }, 800); // 800ms Verzögerung für eine bessere Benutzererfahrung
 
     return () => {
       clearTimeout(handler);
     };
   }, [searchText]);
+
+  // Toast-Animation
+  useEffect(() => {
+    if (toastMessage) {
+      // Animate in
+      Animated.timing(toastAnimation, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+
+      // Set timeout to animate out
+      const timer = setTimeout(() => {
+        Animated.timing(toastAnimation, {
+          toValue: -100,
+          duration: 300,
+          useNativeDriver: true,
+        }).start(() => {
+          setToastMessage(null);
+        });
+      }, 2000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [toastMessage, toastAnimation]);
 
   // Prüfen, ob ein neues Item erstellt werden kann
   const newItemExists = useMemo(() => {
@@ -73,6 +104,11 @@ export default function AddItemsScreen() {
       category: category,
     };
   }, [newItemExists, searchText, categories]);
+
+  // Funktion zum Anzeigen eines Toasts
+  const showToast = (message: string) => {
+    setToastMessage(message);
+  };
 
   const handleSelectItem = (item: Item) => {
     // Ignoriere Klicks auf das virtuelle neue Item
@@ -104,7 +140,13 @@ export default function AddItemsScreen() {
       );
 
       await Promise.all(promises);
-      router.back();
+
+      // Zeige Toast an
+      const itemCount = Object.keys(selectedItems).length;
+      showToast(`${itemCount} Artikel hinzugefügt`);
+
+      // Clear selected items
+      setSelectedItems({});
     } catch (err: any) {
       // Check if the error is about the item limit
       if (err.message?.includes("Limit erreicht")) {
@@ -164,6 +206,9 @@ export default function AddItemsScreen() {
           quantity: 1,
         });
 
+        // Zeige Toast an
+        showToast(`${itemNameToCreate} hinzugefügt`);
+
         // Nach kurzer Verzögerung Tastatur wieder anzeigen
         setTimeout(() => {
           inputRef.current?.focus();
@@ -217,6 +262,44 @@ export default function AddItemsScreen() {
 
   return (
     <View className="flex-1 bg-black-1">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <Animated.View
+          style={[
+            {
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              backgroundColor: "#B23FFF",
+              padding: 16,
+              zIndex: 100,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.3,
+              shadowRadius: 3,
+              elevation: 5,
+              transform: [{ translateY: toastAnimation }],
+            },
+          ]}
+        >
+          <View className="flex-row items-center justify-between">
+            <Text className="text-white font-rubik-medium">{toastMessage}</Text>
+            <TouchableOpacity
+              onPress={() => {
+                Animated.timing(toastAnimation, {
+                  toValue: -100,
+                  duration: 300,
+                  useNativeDriver: true,
+                }).start(() => setToastMessage(null));
+              }}
+            >
+              <Ionicons name="close" size={20} color="white" />
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+      )}
+
       {/* Header */}
       <View className="p-4 flex-row items-center border-b border-black-2">
         <TouchableOpacity

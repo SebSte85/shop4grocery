@@ -251,7 +251,6 @@ serve(async (req) => {
           const oldStatus = previousAttributes.status;
           const newStatus = subscription.status;
           
-          console.log(`Subscription status changed from ${oldStatus} to ${newStatus}`);
           
           // Wenn der Status zu "active" wechselt, aktualisiere die Datenbank
           if (newStatus === 'active' && oldStatus === 'incomplete') {
@@ -430,9 +429,9 @@ async function handleSuccessfulSubscriptionPayment(invoice: any) {
   if (!userId) {
     try {
       // Abonnementdetails abrufen
-      console.log(`Retrieving subscription details for ${subscriptionId}`);
+
       const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-      console.log(`Subscription status: ${subscription.status}`);
+
       
       // Versuch 3: Prüfe subscription.metadata nach userId
       if (subscription.metadata && subscription.metadata.userId) {

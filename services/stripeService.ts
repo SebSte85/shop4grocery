@@ -174,7 +174,6 @@ export const checkSubscriptionStatus = async (userId: string) => {
     // FIX: Add additional check for access_granted
     const accessGranted = isActive;
     
-    console.log(`Subscription check: Status=${data?.status}, Plan=${data?.plan}, isActive=${isActive}`);
     
     return {
       isSubscribed: isActive,
