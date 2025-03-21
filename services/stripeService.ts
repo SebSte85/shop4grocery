@@ -167,22 +167,23 @@ export const checkSubscriptionStatus = async (userId: string) => {
     }
     
     // Überprüfen, ob es ein aktives oder zahlendes Abonnement ist
-    // Für Entwicklungszwecke: Wir betrachten auch 'incomplete' mit Premium Plan als aktiv,
-    // da wir in der Testumgebung keine echten Zahlungen verarbeiten
+    // FIX: 'incomplete' Subscriptions should NOT be considered active regardless of plan
     const isActive = data?.status === 'active' || 
-                     data?.status === 'trialing' || 
-                     (data?.status === 'incomplete' && data?.plan === 'premium');
+                     data?.status === 'trialing';
+    
+    // FIX: Add additional check for access_granted
+    const accessGranted = isActive;
     
     console.log(`Subscription check: Status=${data?.status}, Plan=${data?.plan}, isActive=${isActive}`);
     
     return {
       isSubscribed: isActive,
       subscription: data || null,
-      plan: data?.plan || 'free', // Standard-Plan ist "free", wenn kein Abo gefunden wird
+      plan: isActive ? (data?.plan || 'free') : 'free', // Only return premium plan if active
       
       // Erweiterte Status-Informationen
       displayStatus: data?.display_status || 'inactive',
-      accessGranted: data?.access_granted || false,
+      accessGranted: accessGranted,
       needsAttention: data?.status === 'past_due'
     };
   } catch (error) {
@@ -229,6 +230,20 @@ export const cancelSubscription = async (subscriptionId: string, cancelImmediate
     }
 
     const result = await response.json();
+    
+    // After cancellation, refresh subscription data in Supabase to ensure consistency
+    try {
+      await supabase.from('user_subscriptions')
+        .update({
+          status: cancelImmediately ? 'canceled' : 'active',
+          cancel_at_period_end: !cancelImmediately,
+          updated_at: new Date().toISOString()
+        })
+        .eq('stripe_subscription_id', subscriptionId);
+    } catch (dbError) {
+      console.warn('Failed to update local subscription data after cancellation', dbError);
+    }
+    
     return result;
   } catch (error) {
     console.error('Error cancelling subscription:', error);

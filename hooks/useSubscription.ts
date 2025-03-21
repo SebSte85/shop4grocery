@@ -122,9 +122,9 @@ export function useSubscription() {
     // If data isn't loaded yet, default to false to prevent premature access
     if (!subscriptionStatus) return false;
     
-    // Wenn es Probleme mit dem Abo gibt, trotzdem noch Zugriff gewähren
-    // je nach Status-Interpretation
-    if (!subscriptionStatus.accessGranted) return false;
+    // FIX: Only grant access if user has a valid subscription
+    // We should never grant access if isSubscribed is false
+    if (!subscriptionStatus.isSubscribed) return false;
     
     const features = getFeatures();
     return features[featureName];
@@ -134,9 +134,16 @@ export function useSubscription() {
   const isLimitExceeded = (featureName: keyof SubscriptionFeatures, currentCount: number) => {
     if (!subscriptionStatus) return true;
     
-    // Wenn es Probleme mit dem Abo gibt, trotzdem noch Zugriff gewähren
-    // je nach Status-Interpretation
-    if (!subscriptionStatus.accessGranted) return true;
+    // FIX: Only allow premium limits if the user has a valid subscription
+    // If not subscribed, always use the free plan limits
+    if (!subscriptionStatus.isSubscribed) {
+      const freePlanFeatures = SUBSCRIPTION_FEATURES['free'];
+      const limit = freePlanFeatures[featureName];
+      if (typeof limit === 'number') {
+        return currentCount >= limit;
+      }
+      return false;
+    }
 
     const features = getFeatures();
     // Type-Safe Vergleich: Stelle sicher, dass wir nur Zahlen vergleichen

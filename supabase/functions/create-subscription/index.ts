@@ -119,17 +119,18 @@ serve(async (req) => {
 
     console.log(`Creating subscription for customer ${customerId} with price ${priceId}`);
 
-    // Erstelle ein Abonnement im Status "incomplete" 
-    // (Genau wie in der Stripe-Dokumentation beschrieben)
+    // Erstelle ein Abonnement im Status "incomplete"
     const subscription = await stripe.subscriptions.create({
       customer: customerId,
       items: [{ price: priceId }],
       payment_behavior: 'default_incomplete',
-      payment_settings: { 
-        save_default_payment_method: 'on_subscription' 
+      payment_settings: {
+        payment_method_types: ['card'],
+        save_default_payment_method: 'on_subscription'
       },
       expand: ['latest_invoice.payment_intent'],
-      metadata: combinedMetadata
+      metadata: combinedMetadata,
+      trial_period_days: 0
     });
 
     // Hole das PaymentIntent-Client-Secret vom ersten Invoice

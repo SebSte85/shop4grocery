@@ -9,6 +9,8 @@ import {
   useRemoveListShare,
   useAuth,
 } from "@/hooks";
+import { useSubscription } from "@/hooks/useSubscription";
+import { useRouter } from "expo-router";
 
 interface ShareListButtonProps {
   listId: string;
@@ -22,9 +24,32 @@ export function ShareListButton({ listId }: ShareListButtonProps) {
   const removeShare = useRemoveListShare();
   const [showShares, setShowShares] = useState(false);
   const { user } = useAuth();
+  const { plan, canUseFeature } = useSubscription();
+  const router = useRouter();
+  const isPremium = plan === "premium";
+  const canShare = canUseFeature("sharingEnabled");
 
   const handleShare = () => {
     if (!email.trim()) return;
+
+    // Check if user is premium before sharing
+    if (!canShare) {
+      Alert.alert(
+        "Premium-Funktion",
+        "Das Teilen von Listen ist eine Premium-Funktion. Upgrade auf Premium, um deine Listen mit anderen zu teilen.",
+        [
+          { text: "Abbrechen", style: "cancel" },
+          {
+            text: "Zum Profil",
+            onPress: () => {
+              closeModal();
+              router.push("/(app)/profile");
+            },
+          },
+        ]
+      );
+      return;
+    }
 
     mutate(
       {
@@ -69,6 +94,27 @@ export function ShareListButton({ listId }: ShareListButtonProps) {
     );
   };
 
+  const handleOpenShare = () => {
+    if (!canShare) {
+      // Show premium upgrade prompt
+      Alert.alert(
+        "Premium-Funktion",
+        "Das Teilen von Listen ist eine Premium-Funktion. Upgrade auf Premium, um deine Listen mit anderen zu teilen.",
+        [
+          { text: "Abbrechen", style: "cancel" },
+          {
+            text: "Zum Profil",
+            onPress: () => {
+              router.push("/(app)/profile");
+            },
+          },
+        ]
+      );
+      return;
+    }
+    setIsOpen(true);
+  };
+
   const closeModal = () => {
     setIsOpen(false);
   };
@@ -76,11 +122,17 @@ export function ShareListButton({ listId }: ShareListButtonProps) {
   return (
     <>
       <TouchableOpacity
-        onPress={() => setIsOpen(true)}
-        className="bg-primary-1 p-2 rounded-full mr-2"
+        onPress={handleOpenShare}
+        className={`p-2 rounded-full mr-2 ${
+          isPremium ? "bg-primary-1" : "bg-gray-700"
+        }`}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
       >
-        <Ionicons name="share-outline" size={20} color="white" />
+        <Ionicons
+          name="share-outline"
+          size={20}
+          color={isPremium ? "white" : "#999"}
+        />
       </TouchableOpacity>
 
       <Modal

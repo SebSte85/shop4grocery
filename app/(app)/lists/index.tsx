@@ -4,10 +4,23 @@ import { ListCard } from "@/components/lists/ListCard";
 import { useListsWithRealtime } from "@/hooks/useLists";
 import { useRouter, Link } from "expo-router";
 import { TouchableOpacity } from "react-native-gesture-handler";
+import { useSubscription } from "@/hooks/useSubscription";
+import { useAuth } from "@/hooks/useAuth";
+import PremiumLimitIndicator from "@/components/subscription/PremiumLimitIndicator";
 
 export default function ListsScreen() {
   const { data: lists, isLoading, isSubscribed } = useListsWithRealtime();
   const router = useRouter();
+  const { plan } = useSubscription();
+  const { user } = useAuth();
+
+  // Only count lists owned by the user (not shared lists)
+  const ownedLists =
+    lists?.filter(
+      (list) => list.user_id === user?.id && list.owner_id === user?.id
+    ) || [];
+  const currentListsCount = ownedLists.length;
+  const isPremium = plan === "premium";
 
   if (isLoading) {
     return (
@@ -19,23 +32,38 @@ export default function ListsScreen() {
 
   return (
     <View className="flex-1 bg-black-1">
-      <View className="p-4 flex-row items-center justify-between">
-        <View>
-          <Text variant="semibold" className="text-3xl text-primary-1">
-            Meine Listen
-          </Text>
-          <Text
-            variant="light"
-            className="text-black-3 mt-1 font-rubik-semibold"
-          >
-            Verwalte deine Einkaufslisten
-          </Text>
-        </View>
-        {isSubscribed && (
-          <View className="bg-green-800/30 px-2 py-1 rounded-full">
-            <Text className="text-green-500 text-xs">Live</Text>
+      <View className="p-4">
+        <View className="flex-row items-center justify-between">
+          <View className="flex-row items-center">
+            <Text variant="semibold" className="text-3xl text-primary-1">
+              Meine Listen
+            </Text>
+            {!isPremium && (
+              <View className="ml-3">
+                <PremiumLimitIndicator
+                  featureName="maxShoppingLists"
+                  currentCount={currentListsCount}
+                />
+              </View>
+            )}
           </View>
-        )}
+          <View className="flex-row items-center">
+            {isPremium && isSubscribed && (
+              <View className="bg-green-800/30 px-2 py-1 rounded-full">
+                <Text className="text-green-500 text-xs">Live</Text>
+              </View>
+            )}
+            {isPremium && (
+              <View className="ml-2 bg-purple-900/30 px-2 py-1 rounded-full">
+                <Text className="text-purple-500 text-xs">Premium</Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        <Text variant="light" className="text-black-3 mt-1 font-rubik-semibold">
+          Verwalte deine Einkaufslisten
+        </Text>
       </View>
 
       <ScrollView className="flex-1 px-4">

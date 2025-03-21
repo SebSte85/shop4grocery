@@ -1,4 +1,4 @@
-import { View, TouchableOpacity } from "react-native";
+import { View, TouchableOpacity, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { Text } from "@/components/ui/Text";
 import { Input } from "@/components/ui/Input";
@@ -11,15 +11,38 @@ export default function NewListScreen() {
   const router = useRouter();
   const createList = useCreateList();
   const [name, setName] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   const handleCreate = async () => {
     if (!name.trim()) return;
+    setError(null);
 
     try {
       await createList.mutateAsync({ name: name.trim() });
       router.back();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating list:", error);
+
+      // Check if the error is about the list limit
+      if (error.message?.includes("Limit erreicht")) {
+        Alert.alert(
+          "Limit erreicht",
+          "Du hast das Maximum von 3 Listen für kostenlose Nutzer erreicht. Upgrade auf Premium im Profilbereich für unbegrenzte Listen.",
+          [
+            {
+              text: "Abbrechen",
+              style: "cancel",
+            },
+            {
+              text: "Zum Profil",
+              onPress: () => router.push("/(app)/profile"),
+            },
+          ]
+        );
+      } else {
+        // Show other errors in the UI
+        setError(error.message || "Ein Fehler ist aufgetreten");
+      }
     }
   };
 
@@ -48,6 +71,8 @@ export default function NewListScreen() {
           autoFocus
         />
 
+        {error && <Text className="text-red-500 mt-2">{error}</Text>}
+
         <SupermarketSelector onSelect={setName} />
       </View>
 
@@ -55,11 +80,11 @@ export default function NewListScreen() {
       <View className="px-4 pb-8">
         <TouchableOpacity
           onPress={handleCreate}
-          disabled={!name.trim()}
+          disabled={!name.trim() || createList.isPending}
           className="bg-primary-1 p-4 rounded-xl items-center"
         >
           <Text variant="semibold" className="uppercase text-white">
-            LISTE ERSTELLEN
+            {createList.isPending ? "WIRD ERSTELLT..." : "LISTE ERSTELLEN"}
           </Text>
         </TouchableOpacity>
       </View>

@@ -15,6 +15,9 @@ import { useRef, useState, useEffect } from "react";
 import { useCategories, useInitializeCategories } from "@/hooks";
 import { CategoryIcon } from "@/components/ui/CategoryIcon";
 import { ShareListButton } from "@/components/ShareListButton";
+import { useSubscription } from "@/hooks/useSubscription";
+import PremiumLimitIndicator from "@/components/subscription/PremiumLimitIndicator";
+import PremiumFeatureGate from "@/components/subscription/PremiumFeatureGate";
 
 export default function ListScreen() {
   const router = useRouter();
@@ -34,6 +37,8 @@ export default function ListScreen() {
   const [isCompletingSession, setIsCompletingSession] = useState(false);
   const { data: categories, isLoading: categoriesLoading } = useCategories();
   const initializeCategories = useInitializeCategories();
+  const { plan } = useSubscription();
+  const isPremium = plan === "premium";
 
   // Initialize categories if they don't exist
   useEffect(() => {
@@ -100,6 +105,7 @@ export default function ListScreen() {
 
   const uncheckedItems = list.items?.filter((item) => !item.is_checked) || [];
   const checkedItems = list.items?.filter((item) => item.is_checked) || [];
+  const totalItems = list.items?.length || 0;
 
   // Group unchecked items by category
   const groupedUncheckedItems: Record<string, ListItemType[]> = {};
@@ -180,14 +186,29 @@ export default function ListScreen() {
                 resizeMode="contain"
               />
             )}
-          </View>
-          <View className="flex-row items-center">
-            {isSubscribed && (
-              <View className="mr-2 bg-green-800/30 px-2 py-1 rounded-full">
+            {/* Live badge - only for premium users */}
+            {isPremium && isSubscribed && (
+              <View className="ml-2 bg-green-800/30 px-2 py-1 rounded-full">
                 <Text className="text-green-500 text-xs">Live</Text>
               </View>
             )}
-            <ShareListButton listId={id} />
+          </View>
+          <View className="flex-row items-center">
+            {/* Item count indicator */}
+            {!isPremium && (
+              <View className="mr-3">
+                <PremiumLimitIndicator
+                  featureName="maxItemsPerList"
+                  currentCount={totalItems}
+                />
+              </View>
+            )}
+            <PremiumFeatureGate
+              feature="sharingEnabled"
+              fallback={<ShareListButton listId={id} />}
+            >
+              <ShareListButton listId={id} />
+            </PremiumFeatureGate>
             <TouchableOpacity
               onPress={handleDeleteList}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}

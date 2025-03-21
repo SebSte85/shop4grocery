@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabase";
 import { Item } from "@/types/database.types";
 import { useAuth } from "./useAuth";
 import { guessCategoryForItem } from "./useCategories";
+import { useSubscription } from "./useSubscription";
 
 // Hook zum Abrufen der häufigsten Items des Benutzers aus abgeschlossenen Einkaufssessions
 export function useUserPopularItems(limit: number = 20) {
@@ -83,9 +84,34 @@ interface AddItemToListData {
 
 export function useAddItemToList() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const { getFeatures, plan } = useSubscription();
 
   return useMutation({
     mutationFn: async (data: AddItemToListData) => {
+      if (!user?.id) {
+        throw new Error("Benutzer nicht angemeldet");
+      }
+
+      // Get the current item count in the list
+      const { data: currentItems, error: countError } = await supabase
+        .from("list_items")
+        .select("id")
+        .eq("list_id", data.listId);
+
+      if (countError) {
+        throw new Error("Fehler beim Überprüfen der vorhandenen Items");
+      }
+
+      // Check if adding this item would exceed the limit
+      const features = getFeatures();
+      const maxItems = features.maxItemsPerList as number;
+      const currentItemCount = currentItems?.length || 0;
+
+      if (currentItemCount >= maxItems && plan !== "premium") {
+        throw new Error(`Limit erreicht! Upgrade auf Premium für mehr als ${maxItems} Items pro Liste.`);
+      }
+
       // If categoryId is provided, update the item's category
       if (data.categoryId) {
         const { error: updateError } = await supabase
@@ -205,6 +231,8 @@ export const useCheckedItems = (listId: string, options?: UseMutationOptions<any
 
 export const useAddItem = (listId: string) => {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const { getFeatures, plan } = useSubscription();
 
   interface AddItemData {
     itemId: string;
@@ -215,6 +243,29 @@ export const useAddItem = (listId: string) => {
 
   return useMutation({
     mutationFn: async (data: AddItemData) => {
+      if (!user?.id) {
+        throw new Error("Benutzer nicht angemeldet");
+      }
+
+      // Get the current item count in the list
+      const { data: currentItems, error: countError } = await supabase
+        .from("list_items")
+        .select("id")
+        .eq("list_id", listId);
+
+      if (countError) {
+        throw new Error("Fehler beim Überprüfen der vorhandenen Items");
+      }
+
+      // Check if adding this item would exceed the limit
+      const features = getFeatures();
+      const maxItems = features.maxItemsPerList as number;
+      const currentItemCount = currentItems?.length || 0;
+
+      if (currentItemCount >= maxItems && plan !== "premium") {
+        throw new Error(`Limit erreicht! Upgrade auf Premium für mehr als ${maxItems} Items pro Liste.`);
+      }
+
       const { data: newItem, error } = await supabase.from("list_items").insert([
         {
           list_id: listId,
@@ -297,22 +348,77 @@ export const useDeleteItem = (listId: string) => {
 
 export const useMoveItems = (sourceListId: string) => {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const { getFeatures, plan } = useSubscription();
 
   return useMutation({
-    mutationFn: async ({ targetListId, itemIds }: { targetListId: string, itemIds: number[] }) => {
-      const { data, error: updateError } = await supabase
+    mutationFn: async ({ targetListId, itemIds }: { targetListId: string, itemIds: string[] }) => {
+      if (!user?.id) {
+        throw new Error("Benutzer nicht angemeldet");
+      }
+
+      // Get the current item count in the target list
+      const { data: currentItems, error: countError } = await supabase
         .from("list_items")
-        .update({ list_id: targetListId })
+        .select("id")
+        .eq("list_id", targetListId);
+
+      if (countError) {
+        throw new Error("Fehler beim Überprüfen der vorhandenen Items");
+      }
+
+      // Check if adding these items would exceed the limit
+      const features = getFeatures();
+      const maxItems = features.maxItemsPerList as number;
+      const currentItemCount = currentItems?.length || 0;
+      const newTotalCount = currentItemCount + itemIds.length;
+
+      if (newTotalCount > maxItems && plan !== "premium") {
+        throw new Error(`Limit erreicht! Upgrade auf Premium für mehr als ${maxItems} Items pro Liste.`);
+      }
+
+      // Get items to move
+      const { data: itemsToMove, error: fetchError } = await supabase
+        .from("list_items")
+        .select("*")
         .in("id", itemIds);
       
-      if (updateError) {
-        throw new Error(`Fehler beim Verschieben der Items: ${updateError.message}`);
+      if (fetchError) {
+        throw new Error(`Fehler beim Abrufen der Items: ${fetchError.message}`);
       }
       
-      return data;
+      // Add items to new list
+      const { error: insertError } = await supabase
+        .from("list_items")
+        .insert(
+          itemsToMove.map(item => ({
+            list_id: targetListId,
+            item_id: item.item_id,
+            quantity: item.quantity,
+            unit: item.unit,
+            notes: item.notes,
+            is_checked: item.is_checked,
+          }))
+        );
+      
+      if (insertError) {
+        throw new Error(`Fehler beim Hinzufügen der Items: ${insertError.message}`);
+      }
+      
+      // Remove items from source list
+      const { error: deleteError } = await supabase
+        .from("list_items")
+        .delete()
+        .in("id", itemIds);
+      
+      if (deleteError) {
+        throw new Error(`Fehler beim Löschen der Items: ${deleteError.message}`);
+      }
+      
+      return { success: true };
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["list"] });
+      queryClient.invalidateQueries({ queryKey: ["list", sourceListId] });
       queryClient.invalidateQueries({ queryKey: ["lists"] });
     },
   });
@@ -320,18 +426,56 @@ export const useMoveItems = (sourceListId: string) => {
 
 export const useCopyItems = (sourceListId: string) => {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const { getFeatures, plan } = useSubscription();
 
   return useMutation({
-    mutationFn: async ({ targetListId, itemIds }: { targetListId: string, itemIds: number[] }) => {
+    mutationFn: async ({ targetListId, itemIds }: { targetListId: string, itemIds: string[] }) => {
+      if (!user?.id) {
+        throw new Error("Benutzer nicht angemeldet");
+      }
+
+      // Get the current item count in the target list
+      const { data: currentItems, error: countError } = await supabase
+        .from("list_items")
+        .select("id")
+        .eq("list_id", targetListId);
+
+      if (countError) {
+        throw new Error("Fehler beim Überprüfen der vorhandenen Items");
+      }
+
+      // Check if adding these items would exceed the limit
+      const features = getFeatures();
+      const maxItems = features.maxItemsPerList as number;
+      const currentItemCount = currentItems?.length || 0;
+      const newTotalCount = currentItemCount + itemIds.length;
+
+      if (newTotalCount > maxItems && plan !== "premium") {
+        throw new Error(`Limit erreicht! Upgrade auf Premium für mehr als ${maxItems} Items pro Liste.`);
+      }
+      
+      // Get items to copy
+      const { data: itemsToCopy, error: fetchError } = await supabase
+        .from("list_items")
+        .select("*")
+        .in("id", itemIds);
+      
+      if (fetchError) {
+        throw new Error(`Fehler beim Abrufen der Items: ${fetchError.message}`);
+      }
+      
+      // Add items to target list
       const { data, error } = await supabase
         .from("list_items")
         .insert(
-          itemIds.map((itemId) => ({
+          itemsToCopy.map((item) => ({
             list_id: targetListId,
-            item_id: itemId,
-            quantity: 1,
-            unit: "Stück",
-            is_checked: false,
+            item_id: item.item_id,
+            quantity: item.quantity,
+            unit: item.unit || "Stück",
+            is_checked: item.is_checked,
+            notes: item.notes,
           }))
         );
       

@@ -43,7 +43,7 @@ export interface SubscriptionFeatures {
 export const SUBSCRIPTION_FEATURES: Record<SubscriptionPlan, SubscriptionFeatures> = {
   free: {
     maxShoppingLists: 3,
-    maxItemsPerList: 20,
+    maxItemsPerList: 25,
     sharingEnabled: false,
     categoriesEnabled: true,
     historyDuration: 7, // days

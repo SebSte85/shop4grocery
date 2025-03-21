@@ -5,6 +5,7 @@ import {
   ScrollView,
   TextInput,
   Keyboard,
+  Alert,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
@@ -101,12 +102,33 @@ export default function AddItemsScreen() {
           notes: details.notes,
         })
       );
+
       await Promise.all(promises);
       router.back();
-    } catch (err) {
-      setError(
-        "Fehler beim Hinzufügen der Items. Bitte versuchen Sie es erneut."
-      );
+    } catch (err: any) {
+      // Check if the error is about the item limit
+      if (err.message?.includes("Limit erreicht")) {
+        Alert.alert(
+          "Limit erreicht",
+          "Du hast das Maximum von 25 Items für kostenlose Nutzer erreicht. Upgrade auf Premium im Profilbereich für unbegrenzte Items.",
+          [
+            {
+              text: "Abbrechen",
+              style: "cancel",
+            },
+            {
+              text: "Zum Profil",
+              onPress: () => {
+                router.replace("/(app)/profile");
+              },
+            },
+          ]
+        );
+      } else {
+        setError(
+          "Fehler beim Hinzufügen der Items. Bitte versuchen Sie es erneut."
+        );
+      }
     }
   };
 
@@ -135,19 +157,44 @@ export default function AddItemsScreen() {
       });
 
       // Füge das Item direkt zur Liste hinzu
-      await addItemToList.mutateAsync({
-        listId: id,
-        itemId: newItem.id,
-        quantity: 1,
-      });
+      try {
+        await addItemToList.mutateAsync({
+          listId: id,
+          itemId: newItem.id,
+          quantity: 1,
+        });
 
-      // Nach kurzer Verzögerung Tastatur wieder anzeigen
-      setTimeout(() => {
-        inputRef.current?.focus();
-      }, 300);
-    } catch (err) {
+        // Nach kurzer Verzögerung Tastatur wieder anzeigen
+        setTimeout(() => {
+          inputRef.current?.focus();
+        }, 300);
+      } catch (err: any) {
+        // Check if the error is about the item limit
+        if (err.message?.includes("Limit erreicht")) {
+          Alert.alert(
+            "Limit erreicht",
+            "Du hast das Maximum von 25 Items für kostenlose Nutzer erreicht. Upgrade auf Premium im Profilbereich für unbegrenzte Items.",
+            [
+              {
+                text: "Abbrechen",
+                style: "cancel",
+              },
+              {
+                text: "Zum Profil",
+                onPress: () => {
+                  router.replace("/(app)/profile");
+                },
+              },
+            ]
+          );
+        } else {
+          throw err;
+        }
+      }
+    } catch (err: any) {
       setError(
-        "Fehler beim Erstellen des Items. Bitte versuchen Sie es erneut."
+        err.message ||
+          "Fehler beim Erstellen des Items. Bitte versuchen Sie es erneut."
       );
     }
   };

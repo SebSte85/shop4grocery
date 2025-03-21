@@ -6,6 +6,10 @@ import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import Constants from "expo-constants";
 import { Platform } from "react-native";
+import { useSubscription } from "./useSubscription";
+
+// Get Supabase URL from environment or config
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://your-supabase-url.supabase.co';
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
@@ -136,6 +140,87 @@ export function useAuth() {
     if (error) throw error;
   };
 
+  const deleteAccount = async (password: string, cancelSubscriptionFn?: (cancelImmediately: boolean) => Promise<any>) => {
+    try {
+      // First verify the user's password before allowing account deletion
+      if (!user?.email) {
+        throw new Error("Nicht angemeldet");
+      }
+
+      // Verify current password
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password,
+      });
+
+      if (signInError) {
+        throw new Error("Falsches Passwort. Bitte versuche es erneut.");
+      }
+
+      // If the cancelSubscription function was passed and the user has a subscription,
+      // cancel it first
+      if (cancelSubscriptionFn) {
+        try {
+          // Cancel at period end (false) rather than immediately (true)
+          await cancelSubscriptionFn(false);
+          console.log("Subscription cancelled at period end");
+        } catch (error) {
+          console.error("Error cancelling subscription:", error);
+          // We'll continue with account deletion even if subscription cancellation fails
+        }
+      }
+
+      // Try to delete user data using the Edge Function
+      try {
+        // Get current session for auth
+        const { data: authData, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError || !authData.session) {
+          console.error('Session error:', sessionError);
+          throw new Error('Not authenticated');
+        }
+
+        // Call the Edge Function to delete the account
+        const response = await fetch(`${SUPABASE_URL}/functions/v1/delete-account`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authData.session.access_token}`,
+          },
+          body: JSON.stringify({ 
+            userId: user.id
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error('Account deletion failed:', errorData);
+          throw new Error(errorData.error || 'Failed to delete account');
+        }
+
+        // Account was successfully deleted server-side
+        console.log("Account successfully deleted");
+      } catch (deleteError) {
+        console.error("Error deleting account:", deleteError);
+        throw new Error("Fehler beim Löschen des Kontos. Bitte versuche es später erneut.");
+      }
+      
+      // Sign out the user and explicitly redirect to login screen
+      const { error: signOutError } = await supabase.auth.signOut();
+      if (signOutError) {
+        console.error("Error signing out:", signOutError);
+      }
+      
+      // For a better user experience, we'll redirect to login anyway
+      router.replace("/(auth)/login");
+      
+      return { success: true };
+    } catch (error) {
+      console.error("Error deleting account:", error);
+      throw error;
+    }
+  };
+
   return {
     user,
     loading,
@@ -143,6 +228,7 @@ export function useAuth() {
     signUp,
     signOut,
     resetPassword,
+    deleteAccount,
     supabase,
   };
 }

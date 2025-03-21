@@ -77,12 +77,25 @@ export default function SubscriptionPlans() {
         // Wir laden den Status neu, um das UI zu aktualisieren
         queryClient.invalidateQueries({ queryKey: ["subscription"] });
 
+        // Force refresh the subscription status multiple times to ensure it's up to date
+        // This helps in case webhook processing is delayed
+        setTimeout(() => {
+          queryClient.invalidateQueries({ queryKey: ["subscription"] });
+        }, 2000);
+
+        setTimeout(() => {
+          queryClient.invalidateQueries({ queryKey: ["subscription"] });
+        }, 5000);
+
         Alert.alert(
           "Zahlung erfolgreich",
           "Vielen Dank für deine Zahlung! Dein Premium-Abo wird in Kürze aktiviert.",
           [{ text: "OK" }]
         );
       } else if (result.status === "canceled") {
+        // Make sure subscription status is refreshed after cancellation
+        queryClient.invalidateQueries({ queryKey: ["subscription"] });
+
         Alert.alert(
           "Abonnement abgebrochen",
           "Du hast den Zahlungsprozess abgebrochen. Du kannst es jederzeit erneut versuchen.",
@@ -186,6 +199,32 @@ export default function SubscriptionPlans() {
               )}
             </TouchableOpacity>
           )}
+        </View>
+      );
+    } else if (subscription && subscription.status === "incomplete") {
+      // FIX: Show a special message for incomplete subscriptions
+      return (
+        <View className="mb-6 p-4 bg-orange-900/20 rounded-lg border border-orange-500/30">
+          <Text className="text-lg font-semibold text-orange-400 mb-2">
+            Abonnement unvollständig
+          </Text>
+          <Text className="text-sm text-gray-300 mb-2">
+            Dein Abonnement konnte nicht aktiviert werden, da der
+            Zahlungsprozess nicht abgeschlossen wurde.
+          </Text>
+          <TouchableOpacity
+            onPress={handleSubscribe}
+            disabled={isSubscribing}
+            className="mt-3 py-2 px-4 bg-black-2 border border-orange-500 rounded-lg"
+          >
+            {isSubscribing ? (
+              <ActivityIndicator size="small" color="#f97316" />
+            ) : (
+              <Text className="text-orange-500 text-center font-medium font-rubik">
+                Zahlungsprozess abschließen
+              </Text>
+            )}
+          </TouchableOpacity>
         </View>
       );
     }

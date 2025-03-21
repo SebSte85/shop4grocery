@@ -7,11 +7,14 @@ import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Button } from "@/components/ui/Button";
+import { useSubscription } from "@/hooks/useSubscription";
 
 export default function RecipesScreen() {
   const router = useRouter();
   const [image, setImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const { plan, canUseFeature } = useSubscription();
+  const isPremium = plan === "premium";
 
   // Reset isLoading when screen is focused (when returning from another screen)
   useFocusEffect(
@@ -44,7 +47,29 @@ export default function RecipesScreen() {
     }
   };
 
+  const showPremiumAlert = () => {
+    Alert.alert(
+      "Premium-Funktion",
+      "Die Text-Erkennung für Rezepte ist eine Premium-Funktion. Upgrade auf Premium, um diese Funktion zu nutzen.",
+      [
+        { text: "Abbrechen", style: "cancel" },
+        {
+          text: "Zum Profil",
+          onPress: () => {
+            router.push("/(app)/profile");
+          },
+        },
+      ]
+    );
+  };
+
   const pickImage = async () => {
+    // Check if user is premium
+    if (!isPremium) {
+      showPremiumAlert();
+      return;
+    }
+
     // Frage nach Berechtigungen
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
@@ -82,6 +107,12 @@ export default function RecipesScreen() {
   };
 
   const takePhoto = async () => {
+    // Check if user is premium
+    if (!isPremium) {
+      showPremiumAlert();
+      return;
+    }
+
     // Frage nach Kamera-Berechtigungen
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
 
@@ -131,7 +162,7 @@ export default function RecipesScreen() {
     // Navigation zur Ergebnisseite mit dem Bild-URI als Parameter
     router.push({
       pathname: "/recipes/results",
-      params: { imageUri: image },
+      params: { imageUri: image, isPremium: String(isPremium) },
     });
   };
 

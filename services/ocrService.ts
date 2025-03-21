@@ -14,8 +14,13 @@ export interface ExtractedIngredient {
 const SUPABASE_FUNCTION_URL = "https://eekoxtwazxjmjzaqtotg.supabase.co/functions/v1/ocr";
 
 // Hauptfunktion zur Extraktion von Text aus einem Bild
-export async function extractTextFromImage(imageUri: string): Promise<string> {
+export async function extractTextFromImage(imageUri: string, isPremium: boolean): Promise<string> {
   try {
+    // Check if user has premium subscription
+    if (!isPremium) {
+      throw new Error("Diese Funktion ist nur für Premium-Nutzer verfügbar. Bitte upgrade dein Konto, um OCR-Funktionen zu nutzen.");
+    }
+
     console.log("[OCR Debug] Starte OCR-Prozess mit URI:", imageUri);
     // Bei Expo müssen wir das Bild zuerst als Base64 einlesen
     let base64Image: string | null = null;

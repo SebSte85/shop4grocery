@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "./useAuth";
 import { PermissionLevel } from "@/types/database.types";
+import { useSubscription } from "./useSubscription";
 
 // Hook to get list shares
 export function useListShares(listId: string) {
@@ -77,6 +78,8 @@ export function useListShares(listId: string) {
 // Hook for sharing a list
 export function useShareList() {
   const queryClient = useQueryClient();
+  const { canUseFeature } = useSubscription();
+  const { user } = useAuth();
 
   return useMutation({
     mutationFn: async ({
@@ -88,6 +91,16 @@ export function useShareList() {
       email: string;
       permissionLevel?: PermissionLevel;
     }) => {
+      if (!user?.id) {
+        throw new Error("Benutzer nicht angemeldet");
+      }
+
+      // Check if user can use the sharing feature
+      const canShare = canUseFeature("sharingEnabled");
+      if (!canShare) {
+        throw new Error("Das Teilen von Listen ist eine Premium-Funktion. Bitte upgrade auf Premium, um diese Funktion zu nutzen.");
+      }
+
       if (!email.trim()) {
         throw new Error("Bitte gib eine E-Mail-Adresse ein");
       }

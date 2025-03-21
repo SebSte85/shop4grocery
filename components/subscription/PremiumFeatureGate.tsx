@@ -36,9 +36,9 @@ export default function PremiumFeatureGate({
     setShowModal(true);
   };
 
-  const navigateToSubscription = () => {
+  const navigateToProfile = () => {
     setShowModal(false);
-    router.push("/(app)/subscription");
+    router.push("/(app)/profile");
   };
 
   return (
@@ -53,7 +53,7 @@ export default function PremiumFeatureGate({
           </Text>
           <TouchableOpacity
             className="mt-4 bg-primary-1 px-6 py-2 rounded-full"
-            onPress={navigateToSubscription}
+            onPress={navigateToProfile}
           >
             <Text className="text-white font-rubik-semibold">
               Jetzt upgraden
@@ -91,7 +91,7 @@ export default function PremiumFeatureGate({
 
               <TouchableOpacity
                 className="flex-1 py-3 rounded-lg bg-primary-1"
-                onPress={navigateToSubscription}
+                onPress={navigateToProfile}
               >
                 <Text className="text-white font-rubik-semibold text-center">
                   Upgrade

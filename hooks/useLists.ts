@@ -4,6 +4,7 @@ import { ShoppingList, Unit, PermissionLevel } from "@/types/database.types";
 import { useAuth } from "./useAuth";
 import { useRouter } from "expo-router";
 import { useState, useEffect } from "react";
+import { useSubscription } from "./useSubscription";
 
 export function useLists() {
   const { user } = useAuth();
@@ -174,11 +175,35 @@ interface CreateListData {
 export function useCreateList() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const { getFeatures } = useSubscription();
 
   return useMutation({
     mutationFn: async (data: CreateListData) => {
       if (!user?.id) {
         throw new Error("Benutzer nicht angemeldet");
+      }
+
+      // Get current lists count - only count lists OWNED by the user
+      const { data: listsData, error: listsError } = await supabase
+        .from("shopping_lists")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("owner_id", user.id) // Added check to only count owned lists
+        .eq("is_archived", false);
+
+      if (listsError) {
+        throw new Error("Fehler beim Überprüfen der bestehenden Listen");
+      }
+
+      const currentListsCount = listsData.length;
+      
+      // Get the max lists feature
+      const features = getFeatures();
+      const maxLists = features.maxShoppingLists as number;
+      
+      // Strictly enforce the limit - user should not have more than the limit
+      if (currentListsCount >= maxLists) {
+        throw new Error("Limit erreicht! Upgrade auf Premium für mehr Listen.");
       }
 
       const { data: newList, error } = await supabase
@@ -187,6 +212,7 @@ export function useCreateList() {
           {
             name: data.name.trim(),
             user_id: user.id,
+            owner_id: user.id, // Explicitly set owner_id to track ownership
             is_archived: false,
           },
         ])
